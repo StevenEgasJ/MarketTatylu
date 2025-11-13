@@ -384,7 +384,6 @@ function createProductCard(product) {
                     ${renderProductRatingHtml(product)}
                 </div>
                 <p class="card-text">${shortDesc}</p>
-                <p class="text-muted"><small>${product.capacidad || 'N/A'}</small></p>
                 <div class="mt-auto">
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <div>
@@ -399,8 +398,8 @@ function createProductCard(product) {
                     </div>
                     <div class="d-grid gap-2">
                         <button class="btn btn-outline-secondary" onclick="openProductModal('${product.id || product._id}')">Ver más</button>
-                        <button class="btn btn-primary" 
-                                onclick="agregarAlCarrito('${product.id}', '${product.nombre}', ${discountedPrice.toFixed(2)}, '${product.imagen}', '${product.capacidad || 'N/A'}')"
+            <button class="btn btn-primary" 
+                onclick="agregarAlCarrito('${product.id}', '${product.nombre}', ${discountedPrice.toFixed(2)}, '${product.imagen}', '${product.capacidad || ''}')"
                                 ${(product.stock || 0) <= 0 ? 'disabled' : ''}>
                                 ${(product.stock || 0) <= 0 ? 'Sin Stock' : 'Agregar al Carrito'}
                         </button>
