@@ -1,0 +1,1864 @@
+{
+  "info": {
+    "_postman_id": "59fcd8d6-d001-4fa6-938d-22258c253b69",
+    "name": "MinimarketTatylu API",
+    "description": "API RESTful completa para MinimarketTatylu con buenas prácticas implementadas. Incluye autenticación JWT, gestión de productos, carrito de compras, órdenes, usuarios y panel de administración.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": " Autenticación",
+      "item": [
+        {
+          "name": "Register",
+          "id": "e252d24b-db21-435b-8afa-0d66b96bad61",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"juanito@example.com\",\n  \"password\": \"Password123!\",\n  \"nombre\": \"Juan\",\n  \"apellido\": \"Pérez\",\n  \"telefono\": \"+593987654321\"\n}",
+              "options": {
+                "raw": {
+                  "language": "text"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            },
+            "description": "Registra un nuevo usuario en el sistema. Requiere email único, contraseña segura y datos personales."
+          }
+        },
+        {
+          "name": "Login",
+          "id": "20eb49b4-d867-472e-bd19-7b4d8a275760",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"pepe2@gmail.com\",\n  \"password\": \"Password123!\"\n}",
+              "options": {
+                "raw": {
+                  "language": "text"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Inicia sesión y obtiene un token JWT. Guarda el token en la variable authToken para usar en endpoints protegidos."
+          }
+        },
+        {
+          "name": "Verify Email",
+          "id": "964c954f-174a-4bf3-838c-997f63299f2d",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"verification-token-here\"\n}",
+              "options": {
+                "raw": {
+                  "language": "text"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/email-verifications",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "email-verifications"
+              ]
+            },
+            "description": "Verifica el email del usuario usando el token enviado por correo electrónico."
+          }
+        },
+        {
+          "name": "Request Password Reset",
+          "id": "90774c57-d3e1-46f7-abdc-81204c529396",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"usuario@example.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "text"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/password-reset-requests",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "password-reset-requests"
+              ]
+            },
+            "description": "Solicita un restablecimiento de contraseña. Envía un token al email del usuario."
+          }
+        },
+        {
+          "name": "Reset Password",
+          "id": "9bd33e43-844e-4547-bfe1-b4e2a32ef891",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "",
+              "options": {
+                "raw": {
+                  "language": "text"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/password-resets",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "password-resets"
+              ]
+            },
+            "description": "Restablece la contraseña usando el token recibido por email."
+          }
+        },
+        {
+          "name": "Logout",
+          "id": "f74c30b2-0b39-4f13-a66f-7e1895fd3c7c",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "logout"
+              ]
+            },
+            "description": "Cierra la sesión del usuario. Requiere autenticación JWT."
+          }
+        }
+      ],
+      "id": "57930935-78cf-4354-afca-03b7c51584ab"
+    },
+    {
+      "name": " Productos",
+      "item": [
+        {
+          "name": "Get All Products",
+          "id": "68af90d4-4d71-40ea-948c-c4a5640d653c",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/products?page=1&limit=20&search=&category=&minPrice=&maxPrice=&sortBy=createdAt",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "search",
+                  "value": ""
+                },
+                {
+                  "key": "category",
+                  "value": ""
+                },
+                {
+                  "key": "minPrice",
+                  "value": ""
+                },
+                {
+                  "key": "maxPrice",
+                  "value": ""
+                },
+                {
+                  "key": "sortBy",
+                  "value": "createdAt"
+                }
+              ]
+            },
+            "description": "Obtiene lista de productos con paginación y filtros. Soporta búsqueda, filtrado por categoría, rango de precios y ordenamiento."
+          }
+        },
+        {
+          "name": "Get Product by ID",
+          "id": "294ff5b5-1327-4676-b9eb-df25edc5117c",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/products/69266585bc0ead7f3bf1bb8d",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products",
+                "69266585bc0ead7f3bf1bb8d"
+              ]
+            },
+            "description": "Obtiene los detalles completos de un producto específico por su ID."
+          }
+        },
+        {
+          "name": "Create Product",
+          "id": "ca10f3e9-ada8-481d-9f1a-5fb202e98f72",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Coca Cola 2L\",\n  \"descripcion\": \"Bebida gaseosa sabor cola\",\n  \"precio\": 2.50,\n  \"stock\": 100,\n  \"categoria\": \"Bebidas\",\n  \"imagen\": \"https://example.com/coca-cola.jpg\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products"
+              ]
+            },
+            "description": "Crea un nuevo producto. Requiere autenticación de administrador."
+          }
+        },
+        {
+          "name": "Update Product",
+          "id": "e2da9449-213d-4168-ac85-9c9c5f63b5d0",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"precio\": 2.75,\n  \"stock\": 150\n}",
+              "options": {
+                "raw": {
+                  "language": "text"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/products/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id"
+                }
+              ]
+            },
+            "description": "Actualiza parcialmente un producto existente. Requiere autenticación de administrador."
+          }
+        },
+        {
+          "name": "Delete Product",
+          "id": "0c3452f6-3710-41ab-a026-94016634438f",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/products/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id"
+                }
+              ]
+            },
+            "description": "Elimina un producto del sistema. Requiere autenticación de administrador."
+          }
+        },
+        {
+          "name": "Get Top Selling Products",
+          "id": "2a6905b2-e20e-4b06-8809-d1f26cbae169",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/products/top-selling?limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products",
+                "top-selling"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Obtiene los productos más vendidos. Útil para mostrar en página principal."
+          }
+        },
+        {
+          "name": "Search Products",
+          "id": "d3afe577-4736-4bf9-b386-2a05340c7a19",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/products/search?q=coca&category=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products",
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "coca"
+                },
+                {
+                  "key": "category",
+                  "value": ""
+                }
+              ]
+            },
+            "description": "Búsqueda avanzada de productos por término y categoría opcional."
+          }
+        },
+        {
+          "name": "Get Product Price History",
+          "id": "434fba42-484c-4817-b292-ba3961d37471",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/products/:id/price-history",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products",
+                ":id",
+                "price-history"
+              ],
+              "variable": [
+                {
+                  "key": "id"
+                }
+              ]
+            },
+            "description": "Obtiene el historial de cambios de precio de un producto."
+          }
+        }
+      ],
+      "id": "9e63ce93-13c3-4430-8e38-c0114228d6d5"
+    },
+    {
+      "name": " Categorías",
+      "item": [
+        {
+          "name": "Get All Categories",
+          "id": "278f13cf-4b8a-47ef-98c5-3f169c4f36bb",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/categories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "categories"
+              ]
+            },
+            "description": "Obtiene todas las categorías disponibles en el sistema."
+          }
+        },
+        {
+          "name": "Get Category by ID",
+          "id": "27b300a4-ea1d-4b3d-8342-0abb328bfdee",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/categories/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "categories",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id"
+                }
+              ]
+            },
+            "description": "Obtiene los detalles de una categoría específica."
+          }
+        },
+        {
+          "name": "Get Products by Category",
+          "id": "49b1ae30-b9e5-4ada-bc9f-a53e1f055d18",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/categories/:id/products?page=1&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "categories",
+                ":id",
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ],
+              "variable": [
+                {
+                  "key": "id"
+                }
+              ]
+            },
+            "description": "Obtiene todos los productos de una categoría específica con paginación."
+          }
+        },
+        {
+          "name": "Create Category",
+          "id": "0a031daa-a658-4691-af87-db38c6a945de",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Bebidas\",\n  \"descripcion\": \"Bebidas gaseosas, jugos y agua\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/categories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "categories"
+              ]
+            },
+            "description": "Crea una nueva categoría. Requiere autenticación de administrador."
+          }
+        },
+        {
+          "name": "Update Category",
+          "id": "e8347def-6907-403b-b4e7-ef9fb30eb82c",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Bebidas y Refrescos\",\n  \"descripcion\": \"Bebidas gaseosas, jugos, agua y refrescos\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/categories/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "categories",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id"
+                }
+              ]
+            },
+            "description": "Actualiza una categoría existente. Requiere autenticación de administrador."
+          }
+        },
+        {
+          "name": "Delete Category",
+          "id": "71bf37a5-daae-4a0b-84c2-fc2dd5b5cd06",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/categories/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "categories",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id"
+                }
+              ]
+            },
+            "description": "Elimina una categoría del sistema. Requiere autenticación de administrador."
+          }
+        }
+      ],
+      "id": "3885d4b6-1594-4df5-932c-b72013516354"
+    },
+    {
+      "name": " Carrito",
+      "item": [
+        {
+          "name": "Get Cart",
+          "id": "aaa8a7b6-a854-4526-93e8-0ec963fb4db3",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/cart",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cart"
+              ]
+            },
+            "description": "Obtiene el carrito de compras del usuario autenticado. Requiere autenticación."
+          }
+        },
+        {
+          "name": "Add Item to Cart",
+          "id": "c407e7dd-a8a0-4077-971f-cf9cb976684e",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"69101200dfeb90b6b5b9ddc1\",\n  \"quantity\": 2\n}",
+              "options": {
+                "raw": {
+                  "language": "text"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/cart/items",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cart",
+                "items"
+              ]
+            },
+            "description": "Agrega un producto al carrito. Requiere autenticación de usuario."
+          }
+        },
+        {
+          "name": "Update Cart Item",
+          "id": "95484a66-2647-4d32-ad7f-c456d66cd8bc",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 5\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/cart/items/:itemId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cart",
+                "items",
+                ":itemId"
+              ],
+              "variable": [
+                {
+                  "key": "itemId"
+                }
+              ]
+            },
+            "description": "Actualiza la cantidad de un producto en el carrito. Requiere autenticación de usuario."
+          }
+        },
+        {
+          "name": "Remove Item from Cart",
+          "id": "caf306bb-2e64-4697-8d5b-4d53cd133c6f",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/cart/items/:itemId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cart",
+                "items",
+                ":itemId"
+              ],
+              "variable": [
+                {
+                  "key": "itemId"
+                }
+              ]
+            },
+            "description": "Elimina un producto del carrito. Requiere autenticación de usuario."
+          }
+        },
+        {
+          "name": "Clear Cart",
+          "id": "ac8d44b2-287b-45fd-afe5-0d7e9f2aad9d",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/cart",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cart"
+              ]
+            },
+            "description": "Vacía completamente el carrito de compras. Requiere autenticación de usuario."
+          }
+        }
+      ],
+      "id": "e1da8356-dbed-4bb7-bc34-453d5a3261fd"
+    },
+    {
+      "name": " Checkout y Órdenes",
+      "item": [
+        {
+          "name": "Checkout",
+          "id": "bc76d1c5-01fb-4317-bbd1-8363ef637520",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"shippingAddress\": {\n    \"calle\": \"Av. Principal 123\",\n    \"ciudad\": \"Quito\",\n    \"provincia\": \"Pichincha\",\n    \"codigoPostal\": \"170101\"\n  },\n  \"paymentMethod\": \"tarjeta\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/checkout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "checkout"
+              ]
+            },
+            "description": "Procesa el checkout y crea una orden. Requiere autenticación de usuario."
+          }
+        },
+        {
+          "name": "Get Checkout Summary",
+          "id": "696fe364-5df7-4047-a45b-66c7b9f4f6df",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/checkout/summary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "checkout",
+                "summary"
+              ]
+            },
+            "description": "Obtiene el resumen del checkout antes de confirmar. Requiere autenticación de usuario."
+          }
+        },
+        {
+          "name": "Get My Orders",
+          "id": "cd10eefe-9ecb-43e7-901e-58f73d6b2045",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "orders"
+              ]
+            },
+            "description": "Obtiene todas las órdenes del usuario autenticado. Requiere autenticación de usuario."
+          }
+        },
+        {
+          "name": "Get Order by ID",
+          "id": "87b62321-42aa-41e6-bb4d-f2ed7c947c03",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/orders/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "orders",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id"
+                }
+              ]
+            },
+            "description": "Obtiene los detalles de una orden específica. Requiere autenticación de usuario."
+          }
+        },
+        {
+          "name": "Cancel Order",
+          "id": "b9180e1a-c252-48f4-8420-9ef2d28eacdb",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/orders/:id/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "orders",
+                ":id",
+                "cancel"
+              ],
+              "variable": [
+                {
+                  "key": "id"
+                }
+              ]
+            },
+            "description": "Cancela una orden pendiente. Requiere autenticación de usuario."
+          }
+        },
+        {
+          "name": "Update Order Status",
+          "id": "56efcae3-24b0-434a-9bc4-247b8250ae01",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"enviado\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/orders/:id/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "orders",
+                ":id",
+                "status"
+              ],
+              "variable": [
+                {
+                  "key": "id"
+                }
+              ]
+            },
+            "description": "Actualiza el estado de una orden. Requiere autenticación de administrador."
+          }
+        }
+      ],
+      "id": "00197f07-ddc5-408f-a315-c28f4078bf42"
+    },
+    {
+      "name": " Reviews",
+      "item": [
+        {
+          "name": "Get Product Reviews",
+          "id": "0f4286a1-2c25-4f5b-ac7b-46328ad73f39",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/products/:productId/reviews",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products",
+                ":productId",
+                "reviews"
+              ],
+              "variable": [
+                {
+                  "key": "productId"
+                }
+              ]
+            },
+            "description": "Obtiene todas las reviews de un producto específico."
+          }
+        },
+        {
+          "name": "Create Review",
+          "id": "a7993930-abf2-4a9d-8be7-2cfb1b3f2528",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rating\": 5,\n  \"comment\": \"Excelente producto, muy recomendado\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/products/:productId/reviews",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products",
+                ":productId",
+                "reviews"
+              ],
+              "variable": [
+                {
+                  "key": "productId"
+                }
+              ]
+            },
+            "description": "Crea una review para un producto. Requiere autenticación de usuario."
+          }
+        },
+        {
+          "name": "Update Review",
+          "id": "c0647472-06ef-477f-b402-3df09b7fb953",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rating\": 4,\n  \"comment\": \"Buen producto, actualizo mi opinión\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/reviews/:reviewId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reviews",
+                ":reviewId"
+              ],
+              "variable": [
+                {
+                  "key": "reviewId"
+                }
+              ]
+            },
+            "description": "Actualiza una review existente. Requiere autenticación de usuario propietario."
+          }
+        },
+        {
+          "name": "Delete Review",
+          "id": "1adef036-e236-439a-85ed-3a32eaea9821",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/reviews/:reviewId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reviews",
+                ":reviewId"
+              ],
+              "variable": [
+                {
+                  "key": "reviewId"
+                }
+              ]
+            },
+            "description": "Elimina una review. Requiere autenticación de usuario propietario."
+          }
+        },
+        {
+          "name": "Approve Review",
+          "id": "3a65ab2b-38ce-4390-b501-67d9c89aacb2",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/reviews/:reviewId/approve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reviews",
+                ":reviewId",
+                "approve"
+              ],
+              "variable": [
+                {
+                  "key": "reviewId"
+                }
+              ]
+            },
+            "description": "Aprueba una review pendiente. Requiere autenticación de administrador."
+          }
+        },
+        {
+          "name": "Reject Review",
+          "id": "a2fff1eb-d4f5-48cd-a539-f378ab07dd42",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/reviews/:reviewId/reject",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reviews",
+                ":reviewId",
+                "reject"
+              ],
+              "variable": [
+                {
+                  "key": "reviewId"
+                }
+              ]
+            },
+            "description": "Rechaza una review inapropiada. Requiere autenticación de administrador."
+          }
+        }
+      ],
+      "id": "55f4aeeb-d737-4852-a249-b7df879c9ca9"
+    },
+    {
+      "name": "Usuarios",
+      "item": [
+        {
+          "name": "Get My Profile",
+          "id": "f91a4e62-73d4-424a-b5d7-c8c041a22dd0",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "me"
+              ]
+            },
+            "description": "Obtiene el perfil del usuario autenticado. Requiere autenticación."
+          }
+        },
+        {
+          "name": "Update My Profile",
+          "id": "8f748f7b-9880-415d-a2e7-522ad5469744",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Juan Carlos\",\n  \"apellido\": \"Pérez García\",\n  \"telefono\": \"+593987654321\",\n  \"direccion\": \"Av. Principal 123, Quito\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/users/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "me"
+              ]
+            },
+            "description": "Actualiza el perfil del usuario autenticado. Requiere autenticación."
+          }
+        },
+        {
+          "name": "Delete My Account",
+          "id": "4b4067ac-34ce-434d-b219-97ecb86f2b09",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "me"
+              ]
+            },
+            "description": "Elimina la cuenta del usuario autenticado. Requiere autenticación."
+          }
+        },
+        {
+          "name": "Get My Loyalty Points",
+          "id": "35c6a358-9f01-4df0-b33f-e52930283c11",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/me/loyalty",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "me",
+                "loyalty"
+              ]
+            },
+            "description": "Obtiene los puntos de lealtad del usuario. Requiere autenticación."
+          }
+        },
+        {
+          "name": "Get All Users",
+          "id": "719f8eb0-d565-4d36-8cf9-3d2556d23374",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users"
+              ]
+            },
+            "description": "Obtiene lista de todos los usuarios. Requiere autenticación de administrador."
+          }
+        },
+        {
+          "name": "Get User by ID",
+          "id": "d1684e26-4859-4fce-b010-30c385854307",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id"
+                }
+              ]
+            },
+            "description": "Obtiene los detalles de un usuario específico. Requiere autenticación de administrador."
+          }
+        },
+        {
+          "name": "Update User",
+          "id": "63c228ef-b6bd-4093-ad86-799746a2a5b9",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"admin\",\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/users/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id"
+                }
+              ]
+            },
+            "description": "Actualiza un usuario. Requiere autenticación de administrador."
+          }
+        },
+        {
+          "name": "Delete User",
+          "id": "032fcf89-d579-4f86-a737-3dffc76255b7",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id"
+                }
+              ]
+            },
+            "description": "Elimina un usuario del sistema. Requiere autenticación de administrador."
+          }
+        }
+      ],
+      "id": "64f86aa4-ea30-40a1-bd12-88513e60981f"
+    },
+    {
+      "name": " Admin - Gestión",
+      "item": [
+        {
+          "name": "Create Admin User",
+          "id": "83c990d7-a5e3-4295-8cd1-0a968acebe3b",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@minimarket.com\",\n  \"password\": \"AdminPass123!\",\n  \"role\": \"admin\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "users"
+              ]
+            },
+            "description": "Crea un nuevo usuario administrador. Requiere autenticación de super-administrador."
+          }
+        },
+        {
+          "name": "Send Promotions",
+          "id": "aad78faf-4957-454c-8730-091c948670de",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject\": \"¡Ofertas especiales del mes!\",\n  \"message\": \"Aprovecha nuestras ofertas en productos seleccionados\",\n  \"recipients\": [\"all\"]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/promotions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "promotions"
+              ]
+            },
+            "description": "Envía promociones por email a usuarios. Requiere autenticación de administrador."
+          }
+        },
+        {
+          "name": "Get Dashboard Stats",
+          "id": "eda30087-67bf-4bc5-a217-2a89dae854d2",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/dashboard/stats",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "dashboard",
+                "stats"
+              ]
+            },
+            "description": "Obtiene estadísticas del dashboard administrativo. Requiere autenticación de administrador."
+          }
+        },
+        {
+          "name": "Get System Health",
+          "id": "67f2259d-477d-4f3f-bcf1-3306ad7fc718",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/system/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "system",
+                "health"
+              ]
+            },
+            "description": "Verifica el estado de salud del sistema y base de datos. Requiere autenticación de administrador."
+          }
+        },
+        {
+          "name": "Adjust Product Stock",
+          "id": "1199a794-bab3-40c2-93df-a859f966d6c1",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"adjustment\": 50,\n  \"reason\": \"Reabastecimiento de inventario\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/products/:id/stock-adjustments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "products",
+                ":id",
+                "stock-adjustments"
+              ],
+              "variable": [
+                {
+                  "key": "id"
+                }
+              ]
+            },
+            "description": "Ajusta el stock de un producto. Requiere autenticación de administrador."
+          }
+        }
+      ],
+      "id": "16a73e7b-11e5-4be0-8419-5c9dcdf57686"
+    },
+    {
+      "name": "Admin - Reportes",
+      "item": [
+        {
+          "name": "Get Sales Report",
+          "id": "44fa89f2-54d8-44e0-a939-96c156ae27d6",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/reports/sales?startDate=2024-01-01&endDate=2024-12-31",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "reports",
+                "sales"
+              ],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2024-01-01"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2024-12-31"
+                }
+              ]
+            },
+            "description": "Genera reporte de ventas por período. Requiere autenticación de administrador."
+          }
+        },
+        {
+          "name": "Get Inventory Report",
+          "id": "75aa04ae-a36b-4fcd-8432-b5ec3af79f11",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/reports/inventory",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "reports",
+                "inventory"
+              ]
+            },
+            "description": "Genera reporte de inventario actual. Requiere autenticación de administrador."
+          }
+        },
+        {
+          "name": "Get Users Report",
+          "id": "32f21a22-b9c8-4f14-9f51-6c7d5e1c9b90",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/reports/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "reports",
+                "users"
+              ]
+            },
+            "description": "Genera reporte de usuarios registrados. Requiere autenticación de administrador."
+          }
+        },
+        {
+          "name": "Get Revenue Report",
+          "id": "66ca974b-6132-4aff-b9b1-01e5403a6af7",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/reports/revenue",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "reports",
+                "revenue"
+              ]
+            },
+            "description": "Genera reporte de ingresos y ganancias. Requiere autenticación de administrador."
+          }
+        }
+      ],
+      "id": "2784164b-eac9-4a3c-9dcf-b8cdf01707da"
+    },
+    {
+      "name": " Proveedores (Purchases)",
+      "item": [
+        {
+          "name": "Get All Purchases",
+          "id": "a2bff429-6044-4e4f-8809-ecfb51143248",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/purchases",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "purchases"
+              ]
+            },
+            "description": "Obtiene todas las compras a proveedores. Requiere autenticación de administrador."
+          }
+        },
+        {
+          "name": "Get Purchase by ID",
+          "id": "e751eccd-5deb-492c-b360-154783bb8c77",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/purchases/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "purchases",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id"
+                }
+              ]
+            },
+            "description": "Obtiene los detalles de una compra específica. Requiere autenticación de administrador."
+          }
+        },
+        {
+          "name": "Create Purchase",
+          "id": "70bc1079-b5da-4103-b53d-63765827ee2a",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"supplierId\": \"supplier-id-here\",\n  \"items\": [\n    {\n      \"productId\": \"product-id-1\",\n      \"quantity\": 100,\n      \"unitPrice\": 1.50\n    },\n    {\n      \"productId\": \"product-id-2\",\n      \"quantity\": 50,\n      \"unitPrice\": 2.00\n    }\n  ],\n  \"totalAmount\": 250.00\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/purchases",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "purchases"
+              ]
+            },
+            "description": "Registra una nueva compra a proveedor. Requiere autenticación de administrador."
+          }
+        },
+        {
+          "name": "Update Purchase Status",
+          "id": "3707c75d-8fb5-47bd-af7b-80a863fc653b",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"recibido\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/purchases/:id/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "purchases",
+                ":id",
+                "status"
+              ],
+              "variable": [
+                {
+                  "key": "id"
+                }
+              ]
+            },
+            "description": "Actualiza el estado de una compra. Requiere autenticación de administrador."
+          }
+        }
+      ],
+      "id": "211f0b24-8a26-40f5-aab7-3a04e9556f98"
+    }
+  ],
+  "variable": [
+    {
+      "id": "4a300c61-30e2-46d9-aeb5-f7d8fccfc198",
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    },
+    {
+      "id": "b3358a30-f60c-45a6-9bdc-5633a240392a",
+      "key": "authToken",
+      "value": ""
+    }
+  ]
+}
