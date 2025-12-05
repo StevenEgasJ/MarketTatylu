@@ -1,0 +1,14 @@
+{
+  "workspace": {
+    "id": "435a3b2e-08e3-4458-853b-d917c9c741aa"
+  },
+  "entities": {
+    "collections": [
+      "../MinimarketTatylu API v1.postman_collection.json"
+    ],
+    "environments": [],
+    "specs": [],
+    "flows": [],
+    "globals": []
+  }
+}

@@ -1,0 +1,1605 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Administración - Tatylu</title>
+    <script>
+        // Global error handler to capture syntax errors and unexpected tokens during dev.
+        window.addEventListener('error', function(e) {
+            try {
+                console.group('Global error captured');
+                console.error('Message:', e.message);
+                console.error('Filename:', e.filename);
+                console.error('Lineno:', e.lineno, 'Colno:', e.colno);
+                console.error('Error object:', e.error);
+                console.groupEnd();
+            } catch (err) { console.error('Error handler failed', err); }
+        });
+        window.addEventListener('unhandledrejection', function(ev) {
+            try {
+                console.group('Unhandled rejection');
+                console.error(ev.reason);
+                console.groupEnd();
+            } catch (err) { console.error('Promise error handler failed', err); }
+        });
+        // Defensive normalization for the admin user photo preview element.
+        // Some stored user.photo values may be shorthand like "150x150?text=Sin+Foto" (no host)
+        // which the browser will attempt to resolve as a relative URL. Install a small
+        // observer that normalizes any assigned src to a safe absolute or local path.
+        (function() {
+            function normalizeSrc(value) {
+                if (!value) return './static/img/placeholder.svg';
+                const s = String(value).trim();
+                if (/^(https?:)?\/\//i.test(s) || s.startsWith('data:') || s.startsWith('/') || s.startsWith('./')) return s;
+                if (/^\d+x\d+\?/i.test(s) || s.includes('?text=')) return './static/img/placeholder.svg';
+                return './static/img/' + s;
+            }
+
+            // Wait until the element exists or until DOMContentLoaded
+            function init() {
+                const el = document.getElementById('userPhotoPreview');
+                if (!el) return;
+
+                // Normalize current src (if any)
+                try { el.src = normalizeSrc(el.getAttribute('src') || el.src || ''); } catch(e){}
+
+                // Observe attribute changes to src and normalize them
+                const mo = new MutationObserver(muts => {
+                    for (const m of muts) {
+                        if (m.type === 'attributes' && m.attributeName === 'src') {
+                            try {
+                                const v = el.getAttribute('src') || '';
+                                const norm = normalizeSrc(v);
+                                if (v !== norm) el.setAttribute('src', norm);
+                            } catch (e) { /* ignore */ }
+                        }
+                    }
+                });
+                mo.observe(el, { attributes: true, attributeFilter: ['src'] });
+
+                // Also ensure onerror fallback
+                el.addEventListener('error', function() {
+                    if (!el._erroredOnce) {
+                        el._erroredOnce = true;
+                        el.src = './static/img/placeholder.svg';
+                    }
+                });
+            }
+
+            if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else setTimeout(init, 0);
+        })();
+        // Global guard: normalize src attributes for all images to avoid attempts to load
+        // malformed/hostless values like "150x150?text=Sin+Foto" which trigger ERR_NAME_NOT_RESOLVED.
+        (function() {
+            function normalizeSrc(value) {
+                if (!value) return './static/img/placeholder.svg';
+                const s = String(value).trim();
+                if (/^(https?:)?\/\//i.test(s) || s.startsWith('data:') || s.startsWith('/') || s.startsWith('./')) return s;
+                if (/^\d+x\d+\?/i.test(s) || s.includes('?text=')) return './static/img/placeholder.svg';
+                return './static/img/' + s;
+            }
+
+            function ensureNormalized(img) {
+                try {
+                    if (!img || !img.getAttribute) return;
+                    const cur = img.getAttribute('src') || img.src || '';
+                    const norm = normalizeSrc(cur);
+                    if (cur !== norm) img.setAttribute('src', norm);
+                } catch (e) { /* ignore */ }
+            }
+
+            // Normalize existing imgs
+            document.querySelectorAll('img').forEach(ensureNormalized);
+
+            // Observe attribute changes on images and new images added to the DOM
+            const mo = new MutationObserver(muts => {
+                for (const m of muts) {
+                    if (m.type === 'attributes' && m.target && m.target.tagName === 'IMG' && m.attributeName === 'src') {
+                        ensureNormalized(m.target);
+                    }
+                    if (m.type === 'childList') {
+                        m.addedNodes.forEach(n => {
+                            if (n && n.tagName === 'IMG') ensureNormalized(n);
+                            if (n && n.querySelectorAll) n.querySelectorAll('img').forEach(ensureNormalized);
+                        });
+                    }
+                }
+            });
+
+            mo.observe(document.documentElement || document.body, { attributes: true, subtree: true, childList: true, attributeFilter: ['src'] });
+        })();
+    </script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+    <link rel="stylesheet" href="./static/css/admin.css">
+    <link rel="stylesheet" href="./static/css/invoice-edit.css">
+</head>
+<body>
+    <!-- Header -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="index.html">
+                <img src="./static/img/logo.png" alt="Tatylu" height="40">
+                Tatylu - Admin
+            </a>
+            
+            <div class="navbar-nav ms-auto">
+                <div class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown">
+                        <i class="fa-solid fa-user-shield me-2"></i>
+                        <span id="adminName">Administrador</span>
+                    </a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="index.html"><i class="fa-solid fa-home me-2"></i>Ir a la tienda</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item text-danger" href="#" onclick="adminLogout()"><i class="fa-solid fa-sign-out-alt me-2"></i>Cerrar Sesión</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <nav class="col-md-3 col-lg-2 sidebar">
+                <div class="sidebar-content">
+                    <h5 class="sidebar-title">Panel de Control</h5>
+                    
+                    <ul class="nav flex-column">
+                        <li class="nav-item">
+                            <a class="nav-link active" href="#" onclick="showDashboard()">
+                                <i class="fa-solid fa-chart-line me-2"></i>Dashboard
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#" onclick="showProducts()">
+                                <i class="fa-solid fa-box me-2"></i>Productos
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#" onclick="showUsers()">
+                                <i class="fa-solid fa-users me-2"></i>Usuarios
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#" onclick="showOrders()">
+                                <i class="fa-solid fa-shopping-cart me-2"></i>Pedidos
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#" data-bs-toggle="modal" data-bs-target="#promoModal">
+                                <i class="fa-solid fa-envelope me-2"></i>Promociones
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#" onclick="showReviews()">
+                                <i class="fa-solid fa-star me-2"></i>Reseñas
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#" onclick="showInventoryForecast()">
+                                <i class="fa-solid fa-chart-line me-2"></i>Pronóstico de Inventario
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#" onclick="showSuppliers()">
+                                <i class="fa-solid fa-truck me-2"></i>Proveedores
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </nav>
+
+            <!-- Main Content Area -->
+            <main class="col-md-9 col-lg-10 main-content">
+                <!-- Dashboard -->
+                <div id="dashboard-section" class="content-section active">
+                    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                        <h1 class="h2">Dashboard</h1>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-3 mb-4">
+                            <div class="card bg-primary text-white">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between">
+                                        <div>
+                                            <h6 class="card-title">Total Productos</h6>
+                                            <h2 id="totalProducts">0</h2>
+                                        </div>
+                                        <div class="align-self-center">
+                                            <i class="fa-solid fa-box fa-2x"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-3 mb-4">
+                            <div class="card bg-success text-white">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between">
+                                        <div>
+                                            <h6 class="card-title">Total Usuarios</h6>
+                                            <h2 id="totalUsers">0</h2>
+                                        </div>
+                                        <div class="align-self-center">
+                                            <i class="fa-solid fa-users fa-2x"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-3 mb-4">
+                            <div class="card bg-warning text-white">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between">
+                                        <div>
+                                            <h6 class="card-title">Total Pedidos</h6>
+                                            <h2 id="totalOrders">0</h2>
+                                        </div>
+                                        <div class="align-self-center">
+                                            <i class="fa-solid fa-shopping-cart fa-2x"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-3 mb-4">
+                            <div class="card bg-info text-white">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between">
+                                        <div>
+                                            <h6 class="card-title">Ventas Total</h6>
+                                            <h2 id="totalSales">$0.00</h2>
+                                        </div>
+                                        <div class="align-self-center">
+                                            <i class="fa-solid fa-dollar-sign fa-2x"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5>Pedidos Recientes</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div id="recentOrders">
+                                        <!-- Los pedidos recientes se cargarán aquí -->
+                                    </div>
+                                </div>
+                            </div>
+                            
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5>Productos Más Vendidos</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div id="topProducts">
+                                        <!-- Los productos más vendidos se cargarán aquí -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Promo section for admin (moved below recent orders) -->
+                </div>
+
+                <!-- Reviews Section -->
+                <div id="reviews-section" class="content-section">
+                    <div class="d-flex justify-content-between align-items-center pt-3 pb-2 mb-3 border-bottom">
+                        <h1 class="h2">Moderación de Reseñas</h1>
+                    </div>
+                    <div class="card">
+                        <div class="card-body">
+                            <div id="adminReviewsList">Cargando reseñas...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Products Section -->
+                <div id="products-section" class="content-section">
+                    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                        <h1 class="h2">Gestión de Productos</h1>
+                        <button class="btn btn-primary" onclick="showAddProductModal()">
+                            <i class="fa-solid fa-plus me-2"></i>Agregar Producto
+                        </button>
+                    </div>
+                    
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Imagen</th>
+                                    <th>Nombre</th>
+                                    <th>Precio</th>
+                                    <th>Categoría</th>
+                                    <th>Stock</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="productsTable">
+                                <!-- Los productos se cargarán aquí -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Users Section -->
+                <div id="users-section" class="content-section">
+                    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                        <h1 class="h2">Gestión de Usuarios</h1>
+                        <button class="btn btn-primary" onclick="showAddUserModal()">
+                            <i class="fa-solid fa-user-plus me-2"></i>Agregar Usuario
+                        </button>
+                    </div>
+                    <!-- (removed users error/status box - automatic retry now performs the same action as the Reintentar button) -->
+                    
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Email</th>
+                                    <th>Nombre</th>
+                                    <th>Apellido</th>
+                                    <th>Cédula</th>
+                                    <th>Fecha Registro</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="usersTable">
+                                <!-- Los usuarios se cargarán aquí -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Orders Section -->
+                <div id="orders-section" class="content-section">
+                    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                        <h1 class="h2">Gestión de Pedidos</h1>
+                    </div>
+                    
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Pedido #</th>
+                                    <th>Cliente</th>
+                                    <th>Fecha</th>
+                                    <th>Total</th>
+                                    <th>Estado</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ordersTable">
+                                <!-- Los pedidos se cargarán aquí -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Inventory Forecast Section -->
+                <div id="inventory-section" class="content-section">
+                    <div class="d-flex justify-content-between align-items-center pt-3 pb-2 mb-3 border-bottom">
+                        <h1 class="h2">Pronóstico de Inventario</h1>
+                        <div>
+                            <button class="btn btn-success" onclick="exportForecastCSV()">
+                                <i class="fa-solid fa-download me-2"></i>Exportar CSV
+                            </button>
+                            <button class="btn btn-primary" onclick="refreshForecast()">
+                                <i class="fa-solid fa-refresh me-2"></i>Actualizar
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="row mb-4">
+                        <div class="col-md-3">
+                            <div class="card bg-danger text-white">
+                                <div class="card-body">
+                                    <h6>Productos sin stock</h6>
+                                    <h2 id="outOfStockCount">0</h2>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-warning text-white">
+                                <div class="card-body">
+                                    <h6>Stock bajo</h6>
+                                    <h2 id="lowStockCount">0</h2>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-info text-white">
+                                <div class="card-body">
+                                    <h6>Necesitan reorden</h6>
+                                    <h2 id="reorderCount">0</h2>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-success text-white">
+                                <div class="card-body">
+                                    <h6>Stock saludable</h6>
+                                    <h2 id="healthyStockCount">0</h2>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Productos que necesitan reabastecimiento</h5>
+                            <div>
+                                <button class="btn btn-sm btn-outline-primary me-2" onclick="refreshForecast()">Actualizar</button>
+                                <button class="btn btn-sm btn-success" onclick="createAutoPOs()">Crear Órdenes Automáticas</button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div id="reorderList"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Suppliers Section -->
+                <div id="suppliers-section" class="content-section">
+                    <div class="d-flex justify-content-between align-items-center pt-3 pb-2 mb-3 border-bottom">
+                        <h1 class="h2">Gestión de Proveedores</h1>
+                        <button class="btn btn-primary" onclick="showAddSupplierModal()">
+                            <i class="fa-solid fa-plus me-2"></i>Agregar Proveedor
+                        </button>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Proveedor</th>
+                                    <th>Contacto</th>
+                                    <th>Categorías</th>
+                                    <th>Rating</th>
+                                    <th>Pedidos</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="suppliersTable"></tbody>
+                        </table>
+                    </div>
+
+                    <div class="card mt-4">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5>Órdenes de Compra</h5>
+                            <button class="btn btn-sm btn-primary" onclick="showCreatePOModal()">
+                                <i class="fa-solid fa-plus me-1"></i>Nueva Orden
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div id="purchaseOrdersList"></div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Modal para agregar/editar producto -->
+    <div class="modal fade" id="productModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Agregar Producto</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="productForm">
+                        <input type="hidden" id="productId">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label class="form-label">Nombre del Producto *</label>
+                                <input type="text" class="form-control" id="productName" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Precio *</label>
+                                <input type="number" step="0.01" class="form-control" id="productPrice" required>
+                            </div>
+                        </div>
+                        <div class="row mt-2">
+                            <div class="col-md-4">
+                                <label class="form-label">Descuento (%)</label>
+                                <input type="number" step="0.01" min="0" max="100" class="form-control" id="productDiscount" placeholder="0">
+                                <small class="text-muted">Porcentaje de descuento aplicado al precio (ej: 10 = 10%)</small>
+                            </div>
+                        </div>
+                        <div class="row mt-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Código Único</label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="productCode" placeholder="Se generará automáticamente" readonly>
+                                    <button type="button" class="btn btn-outline-primary" onclick="generateNewCode()" title="Generar nuevo código">
+                                        <i class="fa-solid fa-refresh"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-outline-info" onclick="showCodeInfo()" title="Información sobre códigos">
+                                        <i class="fa-solid fa-question-circle"></i>
+                                    </button>
+                                </div>
+                                <small class="text-muted">El código se genera automáticamente si se deja vacío</small>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Categoría *</label>
+                                <select class="form-select" id="productCategory" required>
+                                    <option value="">Seleccionar categoría</option>
+                                    <option value="cocina">Cocina</option>
+                                    <option value="refrigeracion">Refrigeración</option>
+                                    <option value="lavanderia">Lavandería</option>
+                                    <option value="climatizacion">Climatización</option>
+                                    <option value="pequenos">Pequeños Electrodomésticos</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row mt-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Stock *</label>
+                                <input type="number" min="0" class="form-control" id="productStock" required placeholder="Cantidad disponible">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Imagen del Producto *</label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="productImage" placeholder="URL de imagen o capture/seleccione una foto" required readonly>
+                                    <button type="button" class="btn btn-outline-primary" onclick="showImageOptions()">
+                                        <i class="fa-solid fa-camera"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                                
+                        
+                        <!-- Preview de imagen -->
+                        <div class="row mt-3" id="imagePreviewContainer" style="display: none;">
+                            <div class="col-12">
+                                <label class="form-label">Vista previa:</label>
+                                <div class="text-center">
+                                    <img id="imagePreview" src="" alt="Vista previa" class="img-thumbnail" style="max-width: 200px; max-height: 200px;">
+                                    <br>
+                                    <button type="button" class="btn btn-sm btn-outline-danger mt-2" onclick="clearImagePreview()">
+                                        <i class="fa-solid fa-trash"></i> Eliminar imagen
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Inputs ocultos para cámara y archivo -->
+                        <input type="file" id="fileInput" accept="image/*" style="display: none;" onchange="handleFileSelect(event)">
+                        <video id="cameraVideo" width="300" height="200" autoplay style="display: none;"></video>
+                        <canvas id="cameraCanvas" width="300" height="200" style="display: none;"></canvas>
+                        <div class="mt-3">
+                            <label class="form-label">Descripción</label>
+                            <textarea class="form-control" id="productDescription" rows="3"></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" onclick="saveProduct()">Guardar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para agregar/editar usuario -->
+    <div class="modal fade" id="userModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="userModalTitle">Agregar Usuario</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="userForm">
+                        <input type="hidden" id="editUserId">
+                        
+                        <!-- Foto del usuario -->
+                        <div class="mb-3 text-center">
+                            <label class="form-label">Foto del Usuario</label>
+                            <div id="userPhotoContainer" class="mb-2">
+                                <img id="userPhotoPreview" src="./static/img/placeholder.svg" alt="Foto del usuario" class="img-thumbnail rounded-circle" style="width: 120px; height: 120px; object-fit: cover;">
+                            </div>
+                            <div>
+                                <button type="button" class="btn btn-outline-primary btn-sm me-2" onclick="showUserImageOptions()">
+                                    <i class="fa-solid fa-camera"></i> Cambiar foto
+                                </button>
+                                <button type="button" class="btn btn-outline-danger btn-sm" onclick="clearUserPhoto()">
+                                    <i class="fa-solid fa-trash"></i> Eliminar
+                                </button>
+                            </div>
+                            <input type="hidden" id="userPhoto" value="">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Email *</label>
+                            <input type="email" class="form-control" id="userEmail" required>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label class="form-label">Nombre *</label>
+                                <input type="text" class="form-control" id="userName" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Apellido *</label>
+                                <input type="text" class="form-control" id="userLastName" required>
+                            </div>
+                        </div>
+                        <div class="row mt-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Cédula *</label>
+                                <input type="text" class="form-control" id="userCedula" required maxlength="10" pattern="[0-9]{10}" title="Ingrese exactamente 10 dígitos">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Teléfono *</label>
+                                <input type="tel" class="form-control" id="userPhone" required maxlength="10" pattern="[0-9]{10}" title="Ingrese exactamente 10 dígitos">
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <label class="form-label">Contraseña <span id="passwordRequiredText">*</span></label>
+                            <input type="password" class="form-control" id="userPassword">
+                            <small class="text-muted" id="passwordHelp">Deje en blanco para mantener la contraseña actual</small>
+                        </div>
+                        
+                        <!-- Elementos ocultos para cámara de usuario -->
+                        <input type="file" id="userFileInput" accept="image/*" style="display: none;" onchange="handleUserFileSelect(event)">
+                        <video id="userCameraVideo" width="300" height="200" autoplay style="display: none;"></video>
+                        <canvas id="userCameraCanvas" width="300" height="200" style="display: none;"></canvas>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" onclick="saveUser()">Guardar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para agregar/editar proveedor -->
+    <div class="modal fade" id="supplierModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Agregar Proveedor</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="supplierForm">
+                        <input type="hidden" id="supplierId">
+                        <div class="mb-3">
+                            <label class="form-label">Nombre del Proveedor *</label>
+                            <input type="text" class="form-control" id="supplierName" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Email *</label>
+                            <input type="email" class="form-control" id="supplierEmail" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Teléfono *</label>
+                            <input type="tel" class="form-control" id="supplierPhone" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Dirección</label>
+                            <textarea class="form-control" id="supplierAddress" rows="2"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Categorías de productos</label>
+                            <input type="text" class="form-control" id="supplierCategories" placeholder="Ej: Lácteos, Carnes, Abarrotes">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Tiempo de entrega (días)</label>
+                            <input type="number" class="form-control" id="supplierLeadTime" value="7">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Monto mínimo de pedido</label>
+                            <input type="number" step="0.01" class="form-control" id="supplierMinOrder" value="0">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" onclick="saveSupplier()">Guardar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para enviar promociones por email -->
+    <div class="modal fade" id="promoModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Enviar Promoción por Email</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="promoForm">
+                        <div class="mb-3">
+                            <label class="form-label">Asunto</label>
+                            <input type="text" id="promoSubject" class="form-control" placeholder="Asunto de la promoción" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Mensaje (HTML)</label>
+                            <textarea id="promoHtml" class="form-control" rows="6" placeholder="Mensaje. Usa {{name}} para personalizar."></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Tipo de promoción</label>
+                            <select id="promoType" class="form-select">
+                                <option value="message">Mensaje HTML</option>
+                                <option value="product">Producto destacado</option>
+                                <option value="coupon">Cupón de descuento</option>
+                            </select>
+                        </div>
+                        <div class="mb-3" id="promoProductContainer" style="display:none;">
+                            <label class="form-label">ID del producto (opcional)</label>
+                            <input type="text" id="promoProductId" class="form-control" placeholder="Ingrese _id o código del producto a destacar">
+                            <small class="text-muted">Si se deja vacío, se enviará el mensaje general sin enlace a producto.</small>
+                        </div>
+                        <div class="mb-3" id="promoCouponContainer" style="display:none;">
+                            <label class="form-label">Código de cupón</label>
+                            <input type="text" id="promoCouponCode" class="form-control" placeholder="EJEMPLO10">
+                            <small class="text-muted">El cupón será incluido en el mensaje como texto. Puedes usarlo manualmente en el HTML con <code>{{coupon}}</code>.</small>
+                        </div>
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" id="promoSendAll" checked>
+                            <label class="form-check-label" for="promoSendAll">Enviar a todos los usuarios</label>
+                        </div>
+                        <div class="mb-3" id="promoEmailsContainer" style="display:none;">
+                            <label class="form-label">Correos (uno por línea)</label>
+                            <textarea id="promoEmails" class="form-control" rows="3" placeholder="user1@example.com\nuser2@example.com"></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="promoSendBtn">Enviar Promoción</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para crear orden de compra -->
+    <div class="modal fade" id="purchaseOrderModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Nueva Orden de Compra</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="purchaseOrderForm">
+                        <div class="mb-3">
+                            <label class="form-label">Proveedor *</label>
+                            <select class="form-select" id="poSupplier" required>
+                                <option value="">Seleccionar proveedor</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Productos</label>
+                            <div id="poItemsContainer">
+                                <!-- Items se agregarán dinámicamente -->
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="addPOItem()">
+                                <i class="fa-solid fa-plus me-1"></i>Agregar Producto
+                            </button>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Fecha de Entrega Estimada</label>
+                            <input type="date" class="form-control" id="poDeliveryDate">
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Notas</label>
+                            <textarea class="form-control" id="poNotes" rows="3"></textarea>
+                        </div>
+
+                        <div class="mb-3">
+                            <h5>Total: $<span id="poTotal">0.00</span></h5>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" onclick="savePurchaseOrder()">Crear Orden</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="./static/js/productManager.js"></script>
+    <script src="./static/js/product-codes.js"></script>
+    <!-- API client provides window.api helpers when available -->
+    <script src="./static/js/apiClient.js"></script>
+    <script src="./static/js/inventory-forecast.js"></script>
+    <script src="./static/js/supplier-manager.js"></script>
+    <!-- Use the unified admin script (server-aware) instead of the old admin-new.js -->
+    <script src="./static/js/admin.js"></script>
+    <script src="./static/js/admin-reviews.js"></script>
+    
+    <script>
+        // Función para generar nuevo código
+        function generateNewCode() {
+            const codeField = document.getElementById('productCode');
+            const newCode = generateUniqueProductCode();
+            try {
+                codeField.value = newCode;
+                // focus and select the new code so admin sees it immediately
+                codeField.focus();
+                codeField.select();
+            } catch (e) {
+                console.warn('Could not set code field value', e);
+            }
+
+            // show a short non-blocking toast and explicitly close any stray Swal modal containers
+            try {
+                Swal.fire({
+                    toast: true,
+                    position: 'top-end',
+                    showConfirmButton: false,
+                    timer: 1400,
+                    timerProgressBar: true,
+                    icon: 'success',
+                    title: 'Código generado',
+                    text: `Nuevo código: ${newCode}`
+                });
+
+                // remove any accidental extra modal-backdrop left behind (best-effort)
+                setTimeout(() => {
+                    document.querySelectorAll('.swal2-container').forEach(n => n.style.pointerEvents = 'auto');
+                    const backdrops = document.querySelectorAll('.modal-backdrop');
+                    if (backdrops.length > 1) {
+                        // keep one backdrop only
+                        for (let i = 1; i < backdrops.length; i++) backdrops[i].remove();
+                    }
+                }, 1600);
+            } catch (err) {
+                console.warn('Swal not available or failed to show toast', err);
+            }
+        }
+        
+        // Limpiar formulario cuando se abre el modal
+        document.getElementById('productModal').addEventListener('show.bs.modal', function() {
+            const modalTitle = document.querySelector('#productModal .modal-title');
+            if (modalTitle.textContent === 'Agregar Producto') {
+                // Solo generar código automáticamente para productos nuevos
+                setTimeout(() => {
+                    generateNewCode();
+                }, 100);
+            }
+        });
+
+        // --- NEW: Section navigation helpers (make functions global so onclick attributes work) ---
+        function _clearActiveSidebar() {
+            document.querySelectorAll('.sidebar .nav-link').forEach(link => {
+                link.classList.remove('active');
+            });
+        }
+
+        function _showSectionById(id) {
+            document.querySelectorAll('.content-section').forEach(section => {
+                section.classList.remove('active');
+            });
+            const el = document.getElementById(id);
+            if (el) el.classList.add('active');
+        }
+
+        // Exposed functions used by inline onclick attributes
+        function showDashboard() {
+            _clearActiveSidebar();
+            const dashLink = document.querySelector('.sidebar .nav-link[onclick^="showDashboard"]');
+            if (dashLink) dashLink.classList.add('active');
+            _showSectionById('dashboard-section');
+        }
+
+        function showProducts() {
+            _clearActiveSidebar();
+            const prodLink = document.querySelector('.sidebar .nav-link[onclick^="showProducts"]');
+            if (prodLink) prodLink.classList.add('active');
+            _showSectionById('products-section');
+        }
+
+        function showUsers() {
+            _clearActiveSidebar();
+            const userLink = document.querySelector('.sidebar .nav-link[onclick^="showUsers"]');
+            if (userLink) userLink.classList.add('active');
+            _showSectionById('users-section');
+            // Automatically perform the same action as the "Reintentar" button so the
+            // users table refreshes without requiring a manual click.
+            try {
+                if (typeof retryFetchUsers === 'function') {
+                    // fire-and-forget; retryFetchUsers will call adminManager.showUsers() on success
+                    retryFetchUsers().catch(err => console.warn('retryFetchUsers failed from showUsers:', err));
+                } else if (typeof adminManager !== 'undefined' && typeof adminManager.fetchUsers === 'function') {
+                    adminManager.fetchUsers().then(() => { try { adminManager.showUsers(); } catch(e){}}).catch(err => { try { adminManager.showUsers(); } catch(e){}; console.warn('fetchUsers failed from showUsers:', err); });
+                }
+            } catch (e) { console.warn('Error triggering users refresh:', e); }
+        }
+
+        function showOrders() {
+            _clearActiveSidebar();
+            const orderLink = document.querySelector('.sidebar .nav-link[onclick^="showOrders"]');
+            if (orderLink) orderLink.classList.add('active');
+            _showSectionById('orders-section');
+        }
+
+        function showReviews() {
+            _clearActiveSidebar();
+            const revLink = document.querySelector('.sidebar .nav-link[onclick^="showReviews"]');
+            if (revLink) revLink.classList.add('active');
+            _showSectionById('reviews-section');
+            // load admin reviews list if available
+            try { if (typeof loadAll === 'function') { /* admin-reviews.js exposes loadAll internally; let it init on DOMContentLoaded */ } } catch(e){}
+        }
+
+        function showInventoryForecast() {
+            _clearActiveSidebar();
+            const invLink = document.querySelector('.sidebar .nav-link[onclick^="showInventoryForecast"]');
+            if (invLink) invLink.classList.add('active');
+            _showSectionById('inventory-section');
+            loadInventoryForecast();
+        }
+
+        function showSuppliers() {
+            _clearActiveSidebar();
+            const supLink = document.querySelector('.sidebar .nav-link[onclick^="showSuppliers"]');
+            if (supLink) supLink.classList.add('active');
+            _showSectionById('suppliers-section');
+            loadSuppliersData();
+        }
+
+        // Inventory Forecast Functions
+        function loadInventoryForecast() {
+            const forecast = new InventoryForecast();
+            const report = forecast.generateForecastReport();
+            
+            document.getElementById('outOfStockCount').textContent = report.outOfStockProducts.length;
+            document.getElementById('lowStockCount').textContent = report.lowStockWarnings.length;
+            document.getElementById('reorderCount').textContent = report.productsNeedingReorder.length;
+            
+            const healthyCount = report.totalProducts - report.outOfStockProducts.length - 
+                                report.lowStockWarnings.length - report.productsNeedingReorder.length;
+            document.getElementById('healthyStockCount').textContent = healthyCount;
+            
+            renderReorderList(forecast.getProductsNeedingReorder());
+        }
+
+        function renderReorderList(items) {
+            const container = document.getElementById('reorderList');
+            if (items.length === 0) {
+                container.innerHTML = '<p class="text-muted">No hay productos que necesiten reabastecimiento</p>';
+                return;
+            }
+            
+            let html = '<div class="table-responsive"><table class="table"><thead><tr>' +
+                       '<th>Producto</th><th>Stock Actual</th><th>Punto de Reorden</th>' +
+                       '<th>Cantidad Recomendada</th><th>Urgencia</th><th>Motivo</th><th>Acción</th></tr></thead><tbody>';
+            
+            items.forEach(item => {
+                const urgencyClass = item.urgency > 70 ? 'urgency-high' : 
+                                   item.urgency > 40 ? 'urgency-medium' : 'urgency-low';
+                const daysText = item.prediction ? `${item.prediction.daysRemaining} días restantes` : 'N/A';
+                
+                // Determinar el motivo del reabastecimiento
+                let reasonText = '';
+                let reasonBadge = '';
+                if (item.currentStock === 0) {
+                    reasonText = 'Sin stock';
+                    reasonBadge = 'bg-danger';
+                } else if (item.currentStock < 5) {
+                    reasonText = 'Stock crítico';
+                    reasonBadge = 'bg-danger';
+                } else if (item.currentStock < 10) {
+                    reasonText = 'Stock bajo';
+                    reasonBadge = 'bg-warning text-dark';
+                } else if (item.reason === 'reorder-point') {
+                    reasonText = 'Punto de reorden';
+                    reasonBadge = 'bg-info';
+                } else {
+                    reasonText = 'Reabastecer';
+                    reasonBadge = 'bg-secondary';
+                }
+                
+                html += `<tr>
+                    <td><strong>${escapeHtml(item.product.nombre)}</strong><br>
+                        <small class="text-muted">ID: ${item.product.id}</small></td>
+                    <td><span class="badge ${item.currentStock === 0 ? 'bg-danger' : item.currentStock < 5 ? 'bg-warning' : 'bg-info'}">${item.currentStock}</span></td>
+                    <td>${item.reorderPoint}</td>
+                    <td>${item.recommendedOrderQty}</td>
+                    <td>
+                        <span class="urgency-indicator ${urgencyClass}">${Math.round(item.urgency)}%</span><br>
+                        <small class="text-muted">${daysText}</small>
+                    </td>
+                    <td><span class="badge ${reasonBadge}">${reasonText}</span></td>
+                    <td><button class="btn btn-sm btn-primary" onclick="createPOForProduct('${item.product.id}', ${item.recommendedOrderQty})">
+                        <i class="fa-solid fa-shopping-cart"></i> Ordenar
+                    </button></td>
+                </tr>`;
+            });
+            
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+        }
+
+        function refreshForecast() {
+            loadInventoryForecast();
+            Swal.fire({ title: 'Actualizado', text: 'Pronóstico de inventario actualizado', icon: 'success', timer: 2000 });
+        }
+
+        function exportForecastCSV() {
+            const forecast = new InventoryForecast();
+            const csv = forecast.exportToCSV();
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `forecast-${new Date().toISOString().split('T')[0]}.csv`;
+            a.click();
+        }
+
+        // Supplier Management Functions
+        function loadSuppliersData() {
+            const manager = new SupplierManager();
+            renderSuppliersTable(manager.suppliers);
+            renderPurchaseOrders(manager.purchaseOrders);
+        }
+
+        function renderSuppliersTable(suppliers) {
+            const tbody = document.getElementById('suppliersTable');
+            if (suppliers.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center">No hay proveedores registrados</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = suppliers.map(s => `
+                <tr>
+                    <td><strong>${escapeHtml(s.nombre || s.name || '')}</strong><br>
+                        <small class="text-muted">${s.id}</small></td>
+                    <td>${escapeHtml(s.email || '')}<br>
+                        <small>${escapeHtml(s.telefono || s.phone || '')}</small></td>
+                    <td>${escapeHtml(s.categorias || s.categories || '')}</td>
+                    <td><span class="supplier-rating">${'★'.repeat(Math.round(s.rating || 0))}${'☆'.repeat(5 - Math.round(s.rating || 0))}</span><br>
+                        <small>${(s.rating || 0).toFixed(1)}/5</small></td>
+                    <td>${s.totalOrders || 0}</td>
+                    <td>
+                        <button class="btn btn-sm btn-info" onclick="viewSupplierReport('${s.id}')">
+                            <i class="fa-solid fa-chart-bar"></i>
+                        </button>
+                        <button class="btn btn-sm btn-primary" onclick="editSupplier('${s.id}')">
+                            <i class="fa-solid fa-pen"></i>
+                        </button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteSupplierConfirm('${s.id}')">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function renderPurchaseOrders(orders) {
+            const container = document.getElementById('purchaseOrdersList');
+            if (orders.length === 0) {
+                container.innerHTML = '<p class="text-muted">No hay órdenes de compra</p>';
+                return;
+            }
+            
+            const recent = orders.slice().sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 10);
+            container.innerHTML = recent.map(po => {
+                const statusClass = `po-${po.status || 'pending'}`;
+                return `
+                    <div class="card mb-2">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <strong>${po.id}</strong><br>
+                                    <small>${new Date(po.createdAt).toLocaleDateString()}</small>
+                                </div>
+                                <div class="text-end">
+                                    <span class="po-status ${statusClass}">${(po.status || 'pending').toUpperCase()}</span><br>
+                                    <strong>$${(po.totalAmount || 0).toFixed(2)}</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function showAddSupplierModal() {
+            document.getElementById('supplierForm').reset();
+            document.getElementById('supplierId').value = '';
+            const modal = new bootstrap.Modal(document.getElementById('supplierModal'));
+            modal.show();
+        }
+
+        function saveSupplier() {
+            const manager = new SupplierManager();
+            const data = {
+                id: document.getElementById('supplierId').value,
+                nombre: document.getElementById('supplierName').value,
+                email: document.getElementById('supplierEmail').value,
+                telefono: document.getElementById('supplierPhone').value,
+                direccion: document.getElementById('supplierAddress').value,
+                categorias: document.getElementById('supplierCategories').value,
+                leadTime: parseInt(document.getElementById('supplierLeadTime').value) || 7,
+                minOrder: parseFloat(document.getElementById('supplierMinOrder').value) || 0
+            };
+            
+            manager.saveSupplier(data);
+            bootstrap.Modal.getInstance(document.getElementById('supplierModal')).hide();
+            loadSuppliersData();
+            Swal.fire({ title: 'Guardado', text: 'Proveedor guardado exitosamente', icon: 'success', timer: 2000 });
+        }
+
+        function editSupplier(id) {
+            const manager = new SupplierManager();
+            const supplier = manager.getSupplier(id);
+            if (!supplier) return;
+            
+            document.getElementById('supplierId').value = supplier.id;
+            document.getElementById('supplierName').value = supplier.nombre || '';
+            document.getElementById('supplierEmail').value = supplier.email || '';
+            document.getElementById('supplierPhone').value = supplier.telefono || '';
+            document.getElementById('supplierAddress').value = supplier.direccion || '';
+            document.getElementById('supplierCategories').value = supplier.categorias || '';
+            document.getElementById('supplierLeadTime').value = supplier.leadTime || 7;
+            document.getElementById('supplierMinOrder').value = supplier.minOrder || 0;
+            
+            const modal = new bootstrap.Modal(document.getElementById('supplierModal'));
+            modal.show();
+        }
+
+        function deleteSupplierConfirm(id) {
+            Swal.fire({
+                title: '¿Eliminar proveedor?',
+                text: 'Esta acción no se puede deshacer',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Eliminar',
+                cancelButtonText: 'Cancelar'
+            }).then(result => {
+                if (result.isConfirmed) {
+                    const manager = new SupplierManager();
+                    manager.deleteSupplier(id);
+                    loadSuppliersData();
+                    Swal.fire('Eliminado', 'Proveedor eliminado', 'success');
+                }
+            });
+        }
+
+        function viewSupplierReport(id) {
+            const manager = new SupplierManager();
+            const report = manager.getSupplierReport(id);
+            if (!report) return;
+            
+            Swal.fire({
+                title: report.supplier.nombre,
+                html: `
+                    <div class="text-start">
+                        <p><strong>Rating:</strong> ${report.rating}/5 ⭐</p>
+                        <p><strong>Total de pedidos:</strong> ${report.totalOrders}</p>
+                        <p><strong>Pedidos pendientes:</strong> ${report.pendingOrders}</p>
+                        <p><strong>Pedidos completados:</strong> ${report.completedOrders}</p>
+                        <p><strong>Total gastado:</strong> $${report.totalSpent.toFixed(2)}</p>
+                        ${report.performance.onTimeDeliveries ? `
+                            <p><strong>Entregas a tiempo:</strong> ${report.performance.onTimeDeliveries}</p>
+                            <p><strong>Entregas tardías:</strong> ${report.performance.lateDeliveries || 0}</p>
+                        ` : ''}
+                    </div>
+                `,
+                icon: 'info'
+            });
+        }
+
+        // Modal de crear orden de compra
+        function showCreatePOModal() {
+            const manager = new SupplierManager();
+            const suppliers = manager.suppliers;
+            
+            if (suppliers.length === 0) {
+                Swal.fire({
+                    title: 'Sin Proveedores',
+                    text: 'Primero debes agregar proveedores antes de crear órdenes de compra',
+                    icon: 'warning'
+                });
+                return;
+            }
+
+            // Llenar selector de proveedores
+            const supplierSelect = document.getElementById('poSupplier');
+            supplierSelect.innerHTML = '<option value="">Seleccionar proveedor</option>' +
+                suppliers.map(s => `<option value="${s.id}" data-name="${escapeHtml(s.nombre)}">${escapeHtml(s.nombre)}</option>`).join('');
+
+            // Limpiar formulario
+            document.getElementById('purchaseOrderForm').reset();
+            document.getElementById('poItemsContainer').innerHTML = '';
+            document.getElementById('poTotal').textContent = '0.00';
+
+            // Agregar primer item
+            addPOItem();
+
+            // Mostrar modal
+            const modal = new bootstrap.Modal(document.getElementById('purchaseOrderModal'));
+            modal.show();
+        }
+
+        // Contador de items
+        let poItemCounter = 0;
+
+        // Agregar item a la orden de compra
+        function addPOItem() {
+            const container = document.getElementById('poItemsContainer');
+            const itemId = poItemCounter++;
+            
+            // Obtener productos disponibles (todos, sin filtro de stock)
+            const productos = (typeof adminManager !== 'undefined' && adminManager.getProducts) 
+                ? adminManager.getProducts() 
+                : [];
+
+            const itemHtml = `
+                <div class="card mb-2 po-item" data-item-id="${itemId}">
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <div class="col-md-5">
+                                <select class="form-select po-item-product" onchange="updatePOItemPrice(${itemId})">
+                                    <option value="">Seleccionar producto</option>
+                                    ${productos.map(p => {
+                                        const stock = Number(p.stock) || 0;
+                                        const stockInfo = stock <= 0 ? ' (Sin stock)' : ` (Stock: ${stock})`;
+                                        return `
+                                        <option value="${p.id}" data-price="${p.precio}" data-name="${escapeHtml(p.nombre)}">
+                                            ${escapeHtml(p.nombre)} - $${Number(p.precio).toFixed(2)}${stockInfo}
+                                        </option>
+                                        `;
+                                    }).join('')}
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <input type="number" class="form-control po-item-quantity" placeholder="Cantidad" min="1" value="1" onchange="calculatePOTotal()">
+                            </div>
+                            <div class="col-md-2">
+                                <input type="number" class="form-control po-item-price" placeholder="Precio" step="0.01" min="0" value="0" onchange="calculatePOTotal()">
+                            </div>
+                            <div class="col-md-2">
+                                <input type="number" class="form-control po-item-subtotal" placeholder="Subtotal" readonly value="0">
+                            </div>
+                            <div class="col-md-1">
+                                <button type="button" class="btn btn-sm btn-outline-danger" onclick="removePOItem(${itemId})">
+                                    <i class="fa-solid fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            container.insertAdjacentHTML('beforeend', itemHtml);
+        }
+
+        // Actualizar precio cuando se selecciona un producto
+        function updatePOItemPrice(itemId) {
+            const item = document.querySelector(`.po-item[data-item-id="${itemId}"]`);
+            if (!item) return;
+
+            const select = item.querySelector('.po-item-product');
+            const priceInput = item.querySelector('.po-item-price');
+            
+            const selectedOption = select.options[select.selectedIndex];
+            if (selectedOption && selectedOption.value) {
+                const price = Number(selectedOption.getAttribute('data-price')) || 0;
+                priceInput.value = price.toFixed(2);
+                calculatePOTotal();
+            }
+        }
+
+        // Remover item de la orden
+        function removePOItem(itemId) {
+            const item = document.querySelector(`.po-item[data-item-id="${itemId}"]`);
+            if (item) {
+                item.remove();
+                calculatePOTotal();
+            }
+        }
+
+        // Calcular total de la orden
+        function calculatePOTotal() {
+            let total = 0;
+            const items = document.querySelectorAll('.po-item');
+            
+            items.forEach(item => {
+                const quantity = Number(item.querySelector('.po-item-quantity').value) || 0;
+                const price = Number(item.querySelector('.po-item-price').value) || 0;
+                const subtotal = quantity * price;
+                
+                item.querySelector('.po-item-subtotal').value = subtotal.toFixed(2);
+                total += subtotal;
+            });
+            
+            document.getElementById('poTotal').textContent = total.toFixed(2);
+        }
+
+        // Guardar orden de compra
+        function savePurchaseOrder() {
+            const supplierSelect = document.getElementById('poSupplier');
+            const supplierId = supplierSelect.value;
+            
+            if (!supplierId) {
+                Swal.fire('Error', 'Debes seleccionar un proveedor', 'error');
+                return;
+            }
+
+            const selectedOption = supplierSelect.options[supplierSelect.selectedIndex];
+            const supplierName = selectedOption.getAttribute('data-name');
+
+            // Recopilar items
+            const items = [];
+            const itemElements = document.querySelectorAll('.po-item');
+            
+            if (itemElements.length === 0) {
+                Swal.fire('Error', 'Debes agregar al menos un producto', 'error');
+                return;
+            }
+
+            let hasInvalidItem = false;
+            itemElements.forEach(item => {
+                const productSelect = item.querySelector('.po-item-product');
+                const productId = productSelect.value;
+                
+                if (!productId) {
+                    hasInvalidItem = true;
+                    return;
+                }
+
+                const selectedProductOption = productSelect.options[productSelect.selectedIndex];
+                const productName = selectedProductOption.getAttribute('data-name');
+                const quantity = Number(item.querySelector('.po-item-quantity').value) || 0;
+                const price = Number(item.querySelector('.po-item-price').value) || 0;
+                const subtotal = Number(item.querySelector('.po-item-subtotal').value) || 0;
+
+                items.push({
+                    productId: productId,
+                    productName: productName,
+                    quantity: quantity,
+                    price: price,
+                    subtotal: subtotal
+                });
+            });
+
+            if (hasInvalidItem) {
+                Swal.fire('Error', 'Todos los items deben tener un producto seleccionado', 'error');
+                return;
+            }
+
+            const totalAmount = Number(document.getElementById('poTotal').textContent) || 0;
+            const deliveryDate = document.getElementById('poDeliveryDate').value;
+            const notes = document.getElementById('poNotes').value;
+
+            const poData = {
+                supplierId: supplierId,
+                supplierName: supplierName,
+                items: items,
+                totalAmount: totalAmount,
+                expectedDelivery: deliveryDate,
+                notes: notes
+            };
+
+            // Crear orden de compra
+            const manager = new SupplierManager();
+            const po = manager.createPurchaseOrder(poData);
+
+            if (po) {
+                // Cerrar modal
+                bootstrap.Modal.getInstance(document.getElementById('purchaseOrderModal')).hide();
+
+                // Mostrar éxito
+                Swal.fire({
+                    title: '¡Orden Creada!',
+                    text: `Orden de compra ${po.id} creada exitosamente`,
+                    icon: 'success',
+                    timer: 2000
+                });
+
+                // Recargar lista de órdenes
+                if (typeof loadSuppliersData === 'function') {
+                    loadSuppliersData();
+                }
+            } else {
+                Swal.fire('Error', 'No se pudo crear la orden de compra', 'error');
+            }
+        }
+
+        // Función para crear orden desde un producto específico (desde inventario)
+        function createPOForProduct(productId, quantity) {
+            const manager = new SupplierManager();
+            const suppliers = manager.suppliers;
+            
+            if (suppliers.length === 0) {
+                Swal.fire({
+                    title: 'Sin Proveedores',
+                    text: 'Primero debes agregar proveedores',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Agregar Proveedor',
+                    cancelButtonText: 'Cancelar'
+                }).then(result => {
+                    if (result.isConfirmed) {
+                        showSuppliers();
+                        setTimeout(() => showAddSupplierModal(), 300);
+                    }
+                });
+                return;
+            }
+
+            // Abrir modal con el producto pre-seleccionado
+            showCreatePOModal();
+            
+            setTimeout(() => {
+                // Buscar el producto y seleccionarlo
+                const firstItem = document.querySelector('.po-item');
+                if (firstItem) {
+                    const productSelect = firstItem.querySelector('.po-item-product');
+                    productSelect.value = productId;
+                    updatePOItemPrice(0);
+                    
+                    const quantityInput = firstItem.querySelector('.po-item-quantity');
+                    quantityInput.value = quantity;
+                    calculatePOTotal();
+                }
+            }, 500);
+        }
+
+        // Crear órdenes automáticas basadas en el pronóstico (agrupa por proveedor si es posible)
+        function createAutoPOs() {
+            try {
+                const forecast = new InventoryForecast();
+                const need = forecast.getProductsNeedingReorder();
+                if (!need || need.length === 0) {
+                    Swal.fire('Sin acciones', 'No se encontraron productos que necesiten reabastecimiento', 'info');
+                    return;
+                }
+
+                const manager = new SupplierManager();
+                const suppliers = manager.suppliers || [];
+
+                // Agrupar productos por proveedorId si está disponible, si no usar el primer proveedor
+                const grouped = {};
+                need.forEach(item => {
+                    const prod = item.product || {};
+                    const supplierId = prod.supplierId || prod.proveedorId || (suppliers[0] && suppliers[0].id) || null;
+                    if (!supplierId) return; // no hay proveedor donde pedir
+                    grouped[supplierId] = grouped[supplierId] || [];
+                    grouped[supplierId].push({ product: prod, qty: item.recommendedOrderQty });
+                });
+
+                const createdPOs = [];
+                Object.keys(grouped).forEach(supId => {
+                    const sup = manager.getSupplier(supId) || (suppliers[0] || {});
+                    const items = grouped[supId].map(p => ({ productId: p.product.id, productName: p.product.nombre || p.product.title || '', quantity: p.qty, price: Number(p.product.precio || 0), subtotal: Number(p.product.precio || 0) * p.qty }));
+                    const totalAmount = items.reduce((s,i)=> s + (i.subtotal||0), 0);
+
+                    const poData = {
+                        supplierId: sup.id || supId,
+                        supplierName: sup.nombre || sup.name || 'Proveedor',
+                        items: items,
+                        totalAmount: totalAmount,
+                        expectedDelivery: null,
+                        notes: 'Orden generada automáticamente por sistema de autostock'
+                    };
+
+                    const po = manager.createPurchaseOrder(poData);
+                    if (po) createdPOs.push(po);
+                });
+
+                if (createdPOs.length > 0) {
+                    loadSuppliersData();
+                    Swal.fire('Órdenes creadas', `Se crearon ${createdPOs.length} órdenes de compra automáticamente`, 'success');
+                } else {
+                    Swal.fire('Nada creado', 'No se pudo crear ninguna orden. Revisa que existan proveedores y asignaciones.', 'warning');
+                }
+            } catch (err) {
+                console.error('createAutoPOs error', err);
+                Swal.fire('Error', 'Ocurrió un error creando órdenes automáticas', 'error');
+            }
+        }
+
+        // --- Delegated click handler for table action buttons using data-action/data-id ---
+        document.addEventListener('click', function(e) {
+            const btn = e.target.closest('button[data-action]');
+            if (!btn) return;
+            
+            // Prevenir comportamiento por defecto
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const action = btn.getAttribute('data-action');
+            const id = btn.getAttribute('data-id');
+
+            console.log('Action button clicked:', action, 'ID:', id);
+
+            if (typeof adminManager === 'undefined') {
+                // Try to lazily initialize adminManager if the class is available
+                if (typeof AdminPanelManager === 'function') {
+                    try {
+                        console.warn('adminManager missing — creating new AdminPanelManager instance lazily');
+                        window.adminManager = new AdminPanelManager();
+                    } catch (err) {
+                        console.error('Failed to create adminManager lazily:', err);
+                        Swal.fire('Error', 'No se pudo inicializar el panel de administración. Recarga la página e inténtalo de nuevo.', 'error');
+                        return;
+                    }
+                } else {
+                    console.error('adminManager not available when handling', action, id);
+                    Swal.fire('Error', 'El administrador no está inicializado. Recarga la página y vuelve a intentarlo.', 'error');
+                    return;
+                }
+            }
+
+            try {
+                switch(action) {
+                    case 'edit-product': 
+                        console.log('Calling adminManager.editProduct with ID:', id);
+                        adminManager.editProduct(id); 
+                        break;
+                    case 'delete-product': 
+                        console.log('Calling adminManager.deleteProduct with ID:', id);
+                        adminManager.deleteProduct(id); 
+                        break;
+                    case 'edit-user': 
+                        adminManager.editUser(id); 
+                        break;
+                    case 'delete-user': 
+                        adminManager.deleteUser(id); 
+                        break;
+                    case 'view-order': 
+                        adminManager.viewOrder(id); 
+                        break;
+                    default: 
+                        console.warn('Unknown admin action', action);
+                }
+            } catch (err) {
+                console.error('Error handling admin action', action, id, err);
+                Swal.fire('Error', 'Ocurrió un error al ejecutar la acción: ' + (err.message || err), 'error');
+            }
+        });
+
+        // Ensure a default visible section on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            // If any section already marked .active, keep it; otherwise show dashboard
+            if (!document.querySelector('.content-section.active')) {
+                showDashboard();
+            } else {
+                // Sync sidebar active state with the visible section
+                const visible = document.querySelector('.content-section.active');
+                if (visible && visible.id === 'products-section') showProducts();
+                else if (visible && visible.id === 'users-section') showUsers();
+                else if (visible && visible.id === 'orders-section') showOrders();
+                else showDashboard();
+            }
+        });
+    </script>
+</body>
+</html>
