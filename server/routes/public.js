@@ -17,7 +17,8 @@ function normalizeId(value) {
 function sanitizeUser(userDoc) {
   if (!userDoc) return null;
   const plain = userDoc.toObject ? userDoc.toObject({ virtuals: true }) : { ...userDoc };
-  plain.id = plain.id || plain.publicId || (plain._id ? plain._id.toString() : undefined);
+  const preferredId = plain.publicId || plain.id || (plain._id ? plain._id.toString() : undefined);
+  plain.id = preferredId;
   delete plain.passwordHash;
   delete plain.emailVerificationToken;
   delete plain.emailVerificationExpires;
