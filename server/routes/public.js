@@ -846,4 +846,294 @@ router.delete(['/supplier/:identifier', '/suppliers/:identifier'], async (req, r
   }
 });
 
+// Cart endpoints - Working directly with users.cart field
+
+// GET /cart or /carts - get all carts from all users
+router.get(['/cart', '/carts'], async (req, res) => {
+  try {
+    const limit = parseLimit(req.query.limit);
+    const users = await User.find({ 'cart.0': { $exists: true } })
+      .select('_id id nombre email cart')
+      .sort({ fechaRegistro: -1, _id: -1 })
+      .limit(limit)
+      .lean();
+    
+    // Poblar información completa de productos en cada carrito
+    const cartsWithDetails = await Promise.all(
+      users.map(async (user) => {
+        const itemsWithDetails = await Promise.all(
+          (user.cart || []).map(async (item) => {
+            const product = await Product.findById(item.id).lean();
+            return {
+              id: item.id,
+              nombre: product?.nombre || item.nombre || '',
+              precio: product?.precio || item.precio || 0,
+              descripcion: product?.descripcion || product?.mililitros || '',
+              imagen: product?.imagen || item.imagen || '',
+              cantidad: item.cantidad
+            };
+          })
+        );
+        return {
+          userId: user._id,
+          userInfo: {
+            id: user.id,
+            nombre: user.nombre,
+            email: user.email
+          },
+          items: itemsWithDetails
+        };
+      })
+    );
+    
+    res.json(cartsWithDetails);
+  } catch (err) {
+    console.error('Public carts list failed:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// GET /cart/:userId - get cart for a specific user
+router.get('/cart/:userId', async (req, res) => {
+  try {
+    const { doc, error } = await resolveUserByIdentifier(req.params.userId, {
+      select: '_id id nombre email cart',
+      lean: true
+    });
+
+    if (error) return res.status(400).json({ error });
+    if (!doc) return res.status(404).json({ error: 'User not found' });
+
+    // Poblar la información completa de cada producto en el carrito
+    const cartWithDetails = await Promise.all(
+      (doc.cart || []).map(async (item) => {
+        const product = await Product.findById(item.id).lean();
+        return {
+          id: item.id,
+          nombre: product?.nombre || item.nombre || '',
+          precio: product?.precio || item.precio || 0,
+          descripcion: product?.descripcion || product?.mililitros || '',
+          imagen: product?.imagen || item.imagen || '',
+          cantidad: item.cantidad
+        };
+      })
+    );
+
+    res.json({
+      userId: doc._id,
+      userInfo: {
+        id: doc.id,
+        nombre: doc.nombre,
+        email: doc.email
+      },
+      items: cartWithDetails
+    });
+  } catch (err) {
+    console.error('Public cart lookup failed:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// POST /cart/:userId/item - add product to user's cart
+router.post('/cart/:userId/item', async (req, res) => {
+  try {
+    const productId = normalizeId(req.body.productId);
+    const cantidad = Number(req.body.cantidad) || 1;
+
+    if (!productId || !Types.ObjectId.isValid(productId)) {
+      return res.status(400).json({ error: 'Invalid productId format' });
+    }
+
+    if (cantidad < 1) {
+      return res.status(400).json({ error: 'cantidad must be at least 1' });
+    }
+
+    const { doc, error } = await resolveUserByIdentifier(req.params.userId, {
+      select: '_id id nombre email cart',
+      lean: false
+    });
+
+    if (error) return res.status(400).json({ error });
+    if (!doc) return res.status(404).json({ error: 'User not found' });
+
+    // Obtener información del producto
+    const product = await Product.findById(productId);
+    if (!product) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+
+    // Inicializar cart si no existe
+    if (!doc.cart) {
+      doc.cart = [];
+    }
+
+    // Verificar si el producto ya está en el carrito
+    const existingItemIndex = doc.cart.findIndex(item => item.id === productId);
+    
+    if (existingItemIndex > -1) {
+      // Si existe, actualizar la cantidad
+      doc.cart[existingItemIndex].cantidad += cantidad;
+      // Actualizar también la info del producto por si cambió
+      doc.cart[existingItemIndex].nombre = product.nombre;
+      doc.cart[existingItemIndex].precio = product.precio;
+      doc.cart[existingItemIndex].descripcion = product.descripcion || product.mililitros || '';
+      doc.cart[existingItemIndex].imagen = product.imagen;
+    } else {
+      // Si no existe, agregar el nuevo item con toda la info del producto
+      doc.cart.push({
+        id: productId,
+        nombre: product.nombre,
+        precio: product.precio,
+        descripcion: product.descripcion || product.mililitros || '',
+        imagen: product.imagen,
+        cantidad
+      });
+    }
+
+    await doc.save();
+
+    res.json({
+      success: true,
+      userId: doc._id,
+      userInfo: {
+        id: doc.id,
+        nombre: doc.nombre,
+        email: doc.email
+      },
+      items: doc.cart
+    });
+  } catch (err) {
+    console.error('Public cart add item failed:', err);
+    res.status(400).json({ error: 'Invalid cart item payload' });
+  }
+});
+
+// PUT /cart/:userId/item/:productId - update product quantity in user's cart
+router.put('/cart/:userId/item/:productId', async (req, res) => {
+  try {
+    const productId = normalizeId(req.params.productId);
+    const cantidad = Number(req.body.cantidad);
+
+    if (!productId || !Types.ObjectId.isValid(productId)) {
+      return res.status(400).json({ error: 'Invalid productId format' });
+    }
+
+    if (!cantidad || cantidad < 1) {
+      return res.status(400).json({ error: 'cantidad must be at least 1' });
+    }
+
+    const { doc, error } = await resolveUserByIdentifier(req.params.userId, {
+      select: '_id id nombre email cart',
+      lean: false
+    });
+
+    if (error) return res.status(400).json({ error });
+    if (!doc) return res.status(404).json({ error: 'User not found' });
+
+    if (!doc.cart || doc.cart.length === 0) {
+      return res.status(404).json({ error: 'Cart is empty' });
+    }
+
+    const itemIndex = doc.cart.findIndex(item => item.id === productId);
+    if (itemIndex === -1) {
+      return res.status(404).json({ error: 'Product not found in cart' });
+    }
+
+    // Actualizar la cantidad
+    doc.cart[itemIndex].cantidad = cantidad;
+
+    // Actualizar nombre, precio y descripción del producto por si cambió
+    const product = await Product.findById(productId);
+    if (product) {
+      doc.cart[itemIndex].nombre = product.nombre;
+      doc.cart[itemIndex].precio = product.precio;
+      doc.cart[itemIndex].descripcion = product.descripcion || product.mililitros || '';
+      doc.cart[itemIndex].imagen = product.imagen;
+    }
+
+    await doc.save();
+
+    res.json({
+      success: true,
+      userId: doc._id,
+      userInfo: {
+        id: doc.id,
+        nombre: doc.nombre,
+        email: doc.email
+      },
+      items: doc.cart
+    });
+  } catch (err) {
+    console.error('Public cart update item failed:', err);
+    res.status(400).json({ error: 'Invalid update payload' });
+  }
+});
+
+// DELETE /cart/:userId/item/:productId - remove product from user's cart
+router.delete('/cart/:userId/item/:productId', async (req, res) => {
+  try {
+    const productId = normalizeId(req.params.productId);
+
+    if (!productId || !Types.ObjectId.isValid(productId)) {
+      return res.status(400).json({ error: 'Invalid productId format' });
+    }
+
+    const { doc, error } = await resolveUserByIdentifier(req.params.userId, {
+      select: '_id id nombre email cart',
+      lean: false
+    });
+
+    if (error) return res.status(400).json({ error });
+    if (!doc) return res.status(404).json({ error: 'User not found' });
+
+    if (!doc.cart || doc.cart.length === 0) {
+      return res.status(404).json({ error: 'Cart is empty' });
+    }
+
+    const itemIndex = doc.cart.findIndex(item => item.id === productId);
+    if (itemIndex === -1) {
+      return res.status(404).json({ error: 'Product not found in cart' });
+    }
+
+    // Eliminar el producto del carrito
+    doc.cart.splice(itemIndex, 1);
+    await doc.save();
+
+    res.json({
+      success: true,
+      userId: doc._id,
+      userInfo: {
+        id: doc.id,
+        nombre: doc.nombre,
+        email: doc.email
+      },
+      items: doc.cart
+    });
+  } catch (err) {
+    console.error('Public cart delete item failed:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// DELETE /cart/:userId - clear entire cart for a user
+router.delete('/cart/:userId', async (req, res) => {
+  try {
+    const { doc, error } = await resolveUserByIdentifier(req.params.userId, {
+      select: '_id id nombre email',
+      lean: false
+    });
+
+    if (error) return res.status(400).json({ error });
+    if (!doc) return res.status(404).json({ error: 'User not found' });
+
+    doc.cart = [];
+    await doc.save();
+
+    res.json({ success: true, message: 'Cart cleared' });
+  } catch (err) {
+    console.error('Public cart clear failed:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 module.exports = router;
