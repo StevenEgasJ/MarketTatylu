@@ -54,9 +54,7 @@ function sanitizeItems(products = []) {
     if (!productId) {
       return { error: 'Each item must include productId' };
     }
-    if (!mongoose.Types.ObjectId.isValid(productId)) {
-      return { error: `Invalid productId format: ${productId}` };
-    }
+    // We no longer require ObjectId format - numeric id is also accepted
     if (!Number.isFinite(quantity) || quantity <= 0) {
       return { error: `Invalid quantity for product ${productId}` };
     }
@@ -80,6 +78,59 @@ function pickUserFields(userDoc) {
 function escapeHtml(str) {
   if (!str) return '';
   return String(str).replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m] || m));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helper: find user by _id, numeric id, or email
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function findUserByIdentifier(identifier) {
+  if (!identifier) return null;
+  const idStr = String(identifier).trim();
+  const idNum = parseInt(idStr, 10);
+  
+  // Try by MongoDB _id first
+  if (mongoose.Types.ObjectId.isValid(idStr) && idStr.length === 24) {
+    const byObjectId = await User.findById(idStr);
+    if (byObjectId) return byObjectId;
+  }
+  
+  // Try by id field using $or to match both string and number
+  const orConditions = [{ id: idStr }];
+  if (!isNaN(idNum)) {
+    orConditions.push({ id: idNum });
+  }
+  orConditions.push({ email: idStr });
+  
+  return await User.findOne({ $or: orConditions });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helper: find product by _id or numeric id
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function findProductByIdentifier(identifier, session = null) {
+  if (!identifier) return null;
+  const idStr = String(identifier).trim();
+  const idNum = parseInt(idStr, 10);
+  
+  // Try by MongoDB _id first
+  if (mongoose.Types.ObjectId.isValid(idStr) && idStr.length === 24) {
+    const query = Product.findById(idStr);
+    if (session) query.session(session);
+    const byObjectId = await query;
+    if (byObjectId) return byObjectId;
+  }
+  
+  // Try by id field using $or to match both string and number
+  const orConditions = [{ id: idStr }];
+  if (!isNaN(idNum)) {
+    orConditions.push({ id: idNum });
+  }
+  
+  const query = Product.findOne({ $or: orConditions });
+  if (session) query.session(session);
+  return await query;
 }
 
 function formatMoney(value) {
@@ -252,7 +303,7 @@ router.post('/', async (req, res) => {
     let invoiceUser = null;
 
     if (body.userId) {
-      attachedUser = await User.findById(body.userId);
+      attachedUser = await findUserByIdentifier(body.userId);
       if (!attachedUser) return res.status(404).json({ error: 'User not found' });
       invoiceUser = pickUserFields(attachedUser);
     } else if (body.user && body.user.email && (body.user.nombre || body.user.firstName || body.user.name)) {
@@ -290,15 +341,22 @@ router.post('/', async (req, res) => {
     let committedOrder = null;
 
     await session.withTransaction(async () => {
-      const ids = sanitizedItems.map(it => new mongoose.Types.ObjectId(it.productId));
-      const productDocs = await Product.find({ _id: { $in: ids } }).session(session);
-      const productMap = new Map(productDocs.map(doc => [doc._id.toString(), doc]));
+      // Build a map of products using flexible identifier lookup (supports _id, id, numeric id)
+      const productMap = new Map();
+      const missingIds = [];
+      
+      for (const item of sanitizedItems) {
+        const product = await findProductByIdentifier(item.productId, session);
+        if (!product) {
+          missingIds.push(item.productId);
+        } else {
+          // Store using the original identifier as key
+          productMap.set(item.productId, product);
+        }
+      }
 
-      if (productDocs.length !== sanitizedItems.length) {
-        const missing = sanitizedItems
-          .filter(it => !productMap.has(it.productId))
-          .map(it => it.productId);
-        const err = new Error(`Products not found: ${missing.join(', ')}`);
+      if (missingIds.length > 0) {
+        const err = new Error(`Products not found: ${missingIds.join(', ')}`);
         err.status = 404;
         throw err;
       }
