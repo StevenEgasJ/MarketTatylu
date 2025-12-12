@@ -13,6 +13,55 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, function(m){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]); });
 }
 
+// GET /api/checkout/:userId - get all orders for a user with total sum
+router.get('/:userId', async (req, res) => {
+  try {
+    const userId = req.params.userId;
+
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ error: 'Invalid userId format' });
+    }
+
+    // Buscar todas las órdenes del usuario
+    const orders = await Order.find({ userId })
+      .sort({ fecha: -1 })
+      .lean();
+
+    // Calcular la suma total de todas las órdenes
+    let totalGeneral = 0;
+    let totalSubtotal = 0;
+    let totalIva = 0;
+    let totalEnvio = 0;
+    let totalItems = 0;
+
+    orders.forEach(order => {
+      if (order.resumen) {
+        totalSubtotal += order.resumen.subtotal || 0;
+        totalIva += order.resumen.iva || 0;
+        totalEnvio += order.resumen.envio || 0;
+        totalGeneral += order.resumen.total || 0;
+        totalItems += order.resumen.itemCount || 0;
+      }
+    });
+
+    res.json({
+      userId,
+      totalOrdenes: orders.length,
+      orders,
+      resumenTotal: {
+        subtotal: Math.round(totalSubtotal * 100) / 100,
+        iva: Math.round(totalIva * 100) / 100,
+        envio: Math.round(totalEnvio * 100) / 100,
+        total: Math.round(totalGeneral * 100) / 100,
+        itemCount: totalItems
+      }
+    });
+  } catch (err) {
+    console.error('Error getting user orders:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // POST /api/checkout - purchase cart items atomically
 router.post('/', authMiddleware, async (req, res) => {
   const userId = req.user.id;
