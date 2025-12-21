@@ -279,16 +279,16 @@ router.delete(['/user', '/users'], async (req, res) => {
   }
 });
 
-// Google OAuth routes
+// Google OAuth routes - Actualizar callback URL
 router.get('/auth/google',
   passport.authenticate('google', { scope: ['profile', 'email'] })
 );
 
 router.get('/auth/google/callback',
-  passport.authenticate('google', { failureRedirect: '/login' }),
-  (req, res) => {
-    res.redirect(process.env.CLIENT_URL || 'http://localhost:3000/dashboard');
-  }
+  passport.authenticate('google', { 
+    failureRedirect: process.env.CLIENT_URL ? `${process.env.CLIENT_URL}/login` : '/login',
+    successRedirect: process.env.CLIENT_URL ? `${process.env.CLIENT_URL}/dashboard` : '/dashboard'
+  })
 );
 
 router.get('/auth/logout', (req, res) => {
@@ -296,7 +296,10 @@ router.get('/auth/logout', (req, res) => {
     if (err) {
       return res.status(500).json({ error: 'Logout failed' });
     }
-    res.json({ success: true, message: 'Logged out successfully' });
+    req.session.destroy(() => {
+      res.clearCookie('connect.sid');
+      res.json({ success: true, message: 'Logged out successfully' });
+    });
   });
 });
 

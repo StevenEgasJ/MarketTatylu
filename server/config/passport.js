@@ -3,7 +3,7 @@ const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const User = require('../models/User');
 
 passport.serializeUser((user, done) => {
-  done(null, user._id);
+  done(null, user._id.toString());
 });
 
 passport.deserializeUser(async (id, done) => {
@@ -20,7 +20,7 @@ passport.use(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: process.env.GOOGLE_CALLBACK_URL || '/api/public/auth/google/callback'
+      callbackURL: process.env.GOOGLE_CALLBACK_URL || 'https://supermarkettatylu.onrender.com/auth/google/callback'
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
@@ -42,7 +42,7 @@ passport.use(
           apellido: profile.name?.familyName || '',
           email: email.toLowerCase(),
           photo: profile.photos?.[0]?.value || '',
-          passwordHash: 'oauth-google', // Placeholder for OAuth users
+          passwordHash: 'oauth-google',
           isAdmin: false
         });
 

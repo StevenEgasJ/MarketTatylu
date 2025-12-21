@@ -23,17 +23,38 @@ function authMiddleware(req, res, next) {
 }
 
 function isAuthenticated(req, res, next) {
+  console.log('Auth check:', {
+    isAuthenticated: req.isAuthenticated(),
+    session: req.session ? 'exists' : 'missing',
+    user: req.user ? req.user.email : 'none',
+    path: req.path
+  });
+
   if (req.isAuthenticated()) {
     return next();
   }
-  res.status(401).json({ error: 'Authentication required. Please login with Google.' });
+  
+  return res.status(401).json({ 
+    error: 'Authentication required. Please login with Google.',
+    loginUrl: '/api/public/auth/google'
+  });
 }
 
 function isAdmin(req, res, next) {
+  console.log('Admin check:', {
+    isAuthenticated: req.isAuthenticated(),
+    isAdmin: req.user?.isAdmin,
+    user: req.user ? req.user.email : 'none'
+  });
+
   if (req.isAuthenticated() && req.user && req.user.isAdmin) {
     return next();
   }
-  res.status(403).json({ error: 'Admin access required' });
+  
+  return res.status(403).json({ 
+    error: 'Admin access required',
+    currentUser: req.user ? { email: req.user.email, isAdmin: req.user.isAdmin } : null
+  });
 }
 
 module.exports = { authMiddleware, isAuthenticated, isAdmin };
