@@ -1,11 +1,13 @@
 const express = require('express');
 const { Types } = require('mongoose');
 const bcrypt = require('bcryptjs');
+const passport = require('passport');
 const User = require('../models/User');
 const Product = require('../models/Product');
 const Review = require('../models/Review');
 const Order = require('../models/Order');
 const Supplier = require('../models/Supplier');
+const { isAuthenticated, isAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 const SAFE_USER_FIELDS = '-passwordHash -emailVerificationToken -emailVerificationExpires';
@@ -277,8 +279,36 @@ router.delete(['/user', '/users'], async (req, res) => {
   }
 });
 
-// Products listing available at /products?limit=12
-router.get('/products', async (req, res) => {
+// Google OAuth routes
+router.get('/auth/google',
+  passport.authenticate('google', { scope: ['profile', 'email'] })
+);
+
+router.get('/auth/google/callback',
+  passport.authenticate('google', { failureRedirect: '/login' }),
+  (req, res) => {
+    res.redirect(process.env.CLIENT_URL || 'http://localhost:3000/dashboard');
+  }
+);
+
+router.get('/auth/logout', (req, res) => {
+  req.logout((err) => {
+    if (err) {
+      return res.status(500).json({ error: 'Logout failed' });
+    }
+    res.json({ success: true, message: 'Logged out successfully' });
+  });
+});
+
+router.get('/auth/current', (req, res) => {
+  if (req.isAuthenticated()) {
+    return res.json(sanitizeUser(req.user));
+  }
+  res.status(401).json({ error: 'Not authenticated' });
+});
+
+// Products listing - SECURED
+router.get('/products', isAuthenticated, async (req, res) => {
   try {
     const limit = parseLimit(req.query.limit);
     const products = await Product.find()
@@ -292,8 +322,8 @@ router.get('/products', async (req, res) => {
   }
 });
 
-// Support /products/:identifier similar to users route
-router.get('/products/:identifier', async (req, res) => {
+// Support /products/:identifier - SECURED
+router.get('/products/:identifier', isAuthenticated, async (req, res) => {
   try {
     const { doc, error } = await fetchByIdentifier({
       Model: Product,
@@ -311,8 +341,8 @@ router.get('/products/:identifier', async (req, res) => {
   }
 });
 
-// POST /products - create a new product
-router.post('/products', async (req, res) => {
+// POST /products - SECURED (Admin only)
+router.post('/products', isAuthenticated, isAdmin, async (req, res) => {
   try {
     const nombre = String(req.body.nombre || '').trim();
     const precio = Number(req.body.precio);
@@ -337,8 +367,8 @@ router.post('/products', async (req, res) => {
   }
 });
 
-// PUT /products/:identifier - update a product
-router.put('/products/:identifier', async (req, res) => {
+// PUT /products/:identifier - SECURED (Admin only)
+router.put('/products/:identifier', isAuthenticated, isAdmin, async (req, res) => {
   try {
     const { doc, error } = await fetchByIdentifier({
       Model: Product,
@@ -386,8 +416,8 @@ router.put('/products/:identifier', async (req, res) => {
   }
 });
 
-// DELETE /products/:identifier
-router.delete('/products/:identifier', async (req, res) => {
+// DELETE /products/:identifier - SECURED (Admin only)
+router.delete('/products/:identifier', isAuthenticated, isAdmin, async (req, res) => {
   try {
     const { doc, error } = await fetchByIdentifier({
       Model: Product,
@@ -407,8 +437,8 @@ router.delete('/products/:identifier', async (req, res) => {
   }
 });
 
-// DELETE /products by providing id in body or query
-router.delete('/products', async (req, res) => {
+// DELETE /products - SECURED (Admin only)
+router.delete('/products', isAuthenticated, isAdmin, async (req, res) => {
   try {
     const identifier = normalizeId(req.body && req.body.id ? req.body.id : req.query && req.query.id);
     if (!identifier) return res.status(400).json({ error: 'id is required' });
@@ -610,8 +640,8 @@ router.delete('/reviews/product/:productId', async (req, res) => {
   }
 });
 
-// Orders listing available at /orders
-router.get('/orders', async (req, res) => {
+// Orders listing - SECURED
+router.get('/orders', isAuthenticated, async (req, res) => {
   try {
     const limit = parseLimit(req.query.limit);
     const orders = await Order.find()
@@ -625,8 +655,8 @@ router.get('/orders', async (req, res) => {
   }
 });
 
-// GET /orders/:identifier
-router.get('/orders/:identifier', async (req, res) => {
+// GET /orders/:identifier - SECURED
+router.get('/orders/:identifier', isAuthenticated, async (req, res) => {
   try {
     const { doc, error } = await fetchByIdentifier({
       Model: Order,
@@ -645,8 +675,8 @@ router.get('/orders/:identifier', async (req, res) => {
   }
 });
 
-// POST /orders - create a new order
-router.post('/orders', async (req, res) => {
+// POST /orders - SECURED
+router.post('/orders', isAuthenticated, async (req, res) => {
   try {
     let userId;
     if (req.body.userId) {
@@ -669,8 +699,8 @@ router.post('/orders', async (req, res) => {
   }
 });
 
-// PUT /orders/:identifier - update an order
-router.put('/orders/:identifier', async (req, res) => {
+// PUT /orders/:identifier - SECURED
+router.put('/orders/:identifier', isAuthenticated, async (req, res) => {
   try {
     const { doc, error } = await fetchByIdentifier({
       Model: Order,
@@ -713,8 +743,8 @@ router.put('/orders/:identifier', async (req, res) => {
   }
 });
 
-// DELETE /orders/:identifier
-router.delete('/orders/:identifier', async (req, res) => {
+// DELETE /orders/:identifier - SECURED (Admin only)
+router.delete('/orders/:identifier', isAuthenticated, isAdmin, async (req, res) => {
   try {
     const { doc, error } = await fetchByIdentifier({
       Model: Order,
@@ -735,8 +765,8 @@ router.delete('/orders/:identifier', async (req, res) => {
   }
 });
 
-// DELETE /orders by providing id in body or query
-router.delete('/orders', async (req, res) => {
+// DELETE /orders - SECURED (Admin only)
+router.delete('/orders', isAuthenticated, isAdmin, async (req, res) => {
   try {
     const identifier = normalizeId(req.body && req.body.id ? req.body.id : req.query && req.query.id);
     if (!identifier) return res.status(400).json({ error: 'id is required' });
