@@ -1,11 +1,13 @@
 const express = require('express');
 const { Types } = require('mongoose');
 const bcrypt = require('bcryptjs');
+const passport = require('passport');
 const User = require('../models/User');
 const Product = require('../models/Product');
 const Review = require('../models/Review');
 const Order = require('../models/Order');
 const Supplier = require('../models/Supplier');
+const { authMiddleware} = require('../middleware/auth');
 
 const router = express.Router();
 const SAFE_USER_FIELDS = '-passwordHash -emailVerificationToken -emailVerificationExpires';
@@ -100,7 +102,7 @@ async function resolveUserByIdentifier(identifier, { select, lean = true } = {})
 }
 
 // Users listing available at /user or /users
-router.get(['/user', '/users'], async (req, res) => {
+router.get(['/user', '/users'], authMiddleware, async (req, res) => {
   try {
     const limit = parseLimit(req.query.limit);
     const users = await User.find()
@@ -116,7 +118,7 @@ router.get(['/user', '/users'], async (req, res) => {
 });
 
 // POST /user (alias /users) - create a new user document
-router.post(['/user', '/users'], async (req, res) => {
+router.post(['/user', '/users'], authMiddleware, async (req, res) => {
   try {
     const nombre = (req.body.nombre || '').trim();
     const email = (req.body.email || '').trim().toLowerCase();
@@ -161,7 +163,7 @@ router.post(['/user', '/users'], async (req, res) => {
 });
 
 // Support /user/:identifier (alias /users/:identifier)
-router.get(['/user/:identifier', '/users/:identifier'], async (req, res) => {
+router.get(['/user/:identifier', '/users/:identifier'], authMiddleware, async (req, res) => {
   try {
     const { doc, error } = await resolveUserByIdentifier(req.params.identifier, {
       select: SAFE_USER_FIELDS,
@@ -178,7 +180,7 @@ router.get(['/user/:identifier', '/users/:identifier'], async (req, res) => {
 });
 
 // PUT /user/:identifier (alias /users/:identifier)
-router.put(['/user/:identifier', '/users/:identifier'], async (req, res) => {
+router.put(['/user/:identifier', '/users/:identifier'], authMiddleware, async (req, res) => {
   try {
     const { doc, error } = await resolveUserByIdentifier(req.params.identifier, {
       select: '_id id',
@@ -237,7 +239,7 @@ router.put(['/user/:identifier', '/users/:identifier'], async (req, res) => {
 });
 
 // DELETE /user/:identifier (alias /users/:identifier)
-router.delete(['/user/:identifier', '/users/:identifier'], async (req, res) => {
+router.delete(['/user/:identifier', '/users/:identifier'], authMiddleware, async (req, res) => {
   try {
     const { doc, error } = await resolveUserByIdentifier(req.params.identifier, {
       select: '_id',
@@ -256,7 +258,7 @@ router.delete(['/user/:identifier', '/users/:identifier'], async (req, res) => {
 });
 
 // DELETE /user (alias /users) by providing id in body or query
-router.delete(['/user', '/users'], async (req, res) => {
+router.delete(['/user', '/users'], authMiddleware, async (req, res) => {
   try {
     const identifier = normalizeId(req.body && req.body.id ? req.body.id : req.query && req.query.id);
     if (!identifier) return res.status(400).json({ error: 'id is required' });
@@ -277,8 +279,39 @@ router.delete(['/user', '/users'], async (req, res) => {
   }
 });
 
-// Products listing available at /products?limit=12
-router.get('/products', async (req, res) => {
+// Google OAuth routes - Actualizar callback URL
+router.get('/auth/google',
+  passport.authenticate('google', { scope: ['profile', 'email'] })
+);
+
+router.get('/auth/google/callback',
+  passport.authenticate('google', { 
+    failureRedirect: process.env.CLIENT_URL ? `${process.env.CLIENT_URL}/login` : '/login',
+    successRedirect: process.env.CLIENT_URL ? `${process.env.CLIENT_URL}/dashboard` : '/dashboard'
+  })
+);
+
+router.get('/auth/logout', (req, res) => {
+  req.logout((err) => {
+    if (err) {
+      return res.status(500).json({ error: 'Logout failed' });
+    }
+    req.session.destroy(() => {
+      res.clearCookie('connect.sid');
+      res.json({ success: true, message: 'Logged out successfully' });
+    });
+  });
+});
+
+router.get('/auth/current', (req, res) => {
+  if (req.isAuthenticated()) {
+    return res.json(sanitizeUser(req.user));
+  }
+  res.status(401).json({ error: 'Not authenticated' });
+});
+
+// Products listing - SECURED
+router.get('/products', authMiddleware, async (req, res) => {
   try {
     const limit = parseLimit(req.query.limit);
     const products = await Product.find()
@@ -292,8 +325,8 @@ router.get('/products', async (req, res) => {
   }
 });
 
-// Support /products/:identifier similar to users route
-router.get('/products/:identifier', async (req, res) => {
+    // Support /products/:identifier - SECURED
+ router.get('/products/:identifier', authMiddleware, async (req, res) => {
   try {
     const { doc, error } = await fetchByIdentifier({
       Model: Product,
@@ -311,8 +344,8 @@ router.get('/products/:identifier', async (req, res) => {
   }
 });
 
-// POST /products - create a new product
-router.post('/products', async (req, res) => {
+// POST /products - SECURED (Admin only)
+router.post('/products', authMiddleware, async (req, res) => {
   try {
     const nombre = String(req.body.nombre || '').trim();
     const precio = Number(req.body.precio);
@@ -337,8 +370,8 @@ router.post('/products', async (req, res) => {
   }
 });
 
-// PUT /products/:identifier - update a product
-router.put('/products/:identifier', async (req, res) => {
+// PUT /products/:identifier - SECURED (Admin only)
+router.put('/products/:identifier', authMiddleware, async (req, res) => {
   try {
     const { doc, error } = await fetchByIdentifier({
       Model: Product,
@@ -386,8 +419,8 @@ router.put('/products/:identifier', async (req, res) => {
   }
 });
 
-// DELETE /products/:identifier
-router.delete('/products/:identifier', async (req, res) => {
+// DELETE /products/:identifier - SECURED (Admin only)
+router.delete('/products/:identifier', authMiddleware, async (req, res) => {
   try {
     const { doc, error } = await fetchByIdentifier({
       Model: Product,
@@ -407,8 +440,8 @@ router.delete('/products/:identifier', async (req, res) => {
   }
 });
 
-// DELETE /products by providing id in body or query
-router.delete('/products', async (req, res) => {
+// DELETE /products - SECURED (Admin only)
+router.delete('/products', authMiddleware, async (req, res) => {
   try {
     const identifier = normalizeId(req.body && req.body.id ? req.body.id : req.query && req.query.id);
     if (!identifier) return res.status(400).json({ error: 'id is required' });
@@ -433,7 +466,7 @@ router.delete('/products', async (req, res) => {
 });
 
 // Reviews listing available at /review or /reviews
-router.get(['/review', '/reviews'], async (req, res) => {
+router.get(['/review', '/reviews'], authMiddleware, async (req, res) => {
   try {
     const limit = parseLimit(req.query.limit);
     const reviews = await Review.find()
@@ -448,7 +481,7 @@ router.get(['/review', '/reviews'], async (req, res) => {
 });
 
 // POST /review (alias /reviews) - create a new review
-router.post(['/review', '/reviews'], async (req, res) => {
+router.post(['/review', '/reviews'], authMiddleware, async (req, res) => {
   try {
     const productId = normalizeId(req.body.productId);
     const rating = Number(req.body.rating);
@@ -491,7 +524,7 @@ router.post(['/review', '/reviews'], async (req, res) => {
 });
 
 // GET /reviews/product/:productId - get all reviews for a specific product
-router.get('/reviews/product/:productId', async (req, res) => {
+router.get('/reviews/product/:productId', authMiddleware, async (req, res) => {
   try {
     const productId = normalizeId(req.params.productId);
     
@@ -513,7 +546,7 @@ router.get('/reviews/product/:productId', async (req, res) => {
 });
 
 // PUT /review/:identifier (alias /reviews/:identifier)
-router.put(['/review/:identifier', '/reviews/:identifier'], async (req, res) => {
+router.put(['/review/:identifier', '/reviews/:identifier'], authMiddleware, async (req, res) => {
   try {
     const { doc, error } = await fetchByIdentifier({
       Model: Review,
@@ -572,7 +605,7 @@ router.put(['/review/:identifier', '/reviews/:identifier'], async (req, res) => 
 });
 
 // DELETE /review/:identifier (alias /reviews/:identifier)
-router.delete(['/review/:identifier', '/reviews/:identifier'], async (req, res) => {
+router.delete(['/review/:identifier', '/reviews/:identifier'], authMiddleware, async (req, res) => {
   try {
     const { doc, error } = await fetchByIdentifier({
       Model: Review,
@@ -594,7 +627,7 @@ router.delete(['/review/:identifier', '/reviews/:identifier'], async (req, res) 
 });
 
 // DELETE /reviews/product/:productId - delete all reviews for a specific product
-router.delete('/reviews/product/:productId', async (req, res) => {
+router.delete('/reviews/product/:productId', authMiddleware, async (req, res) => {
   try {
     const productId = normalizeId(req.params.productId);
     
@@ -610,8 +643,8 @@ router.delete('/reviews/product/:productId', async (req, res) => {
   }
 });
 
-// Orders listing available at /orders
-router.get('/orders', async (req, res) => {
+// Orders listing - SECURED
+router.get('/orders', authMiddleware, async (req, res) => {
   try {
     const limit = parseLimit(req.query.limit);
     const orders = await Order.find()
@@ -625,8 +658,8 @@ router.get('/orders', async (req, res) => {
   }
 });
 
-// GET /orders/:identifier
-router.get('/orders/:identifier', async (req, res) => {
+// GET /orders/:identifier - SECURED
+router.get('/orders/:identifier', authMiddleware, async (req, res) => {
   try {
     const { doc, error } = await fetchByIdentifier({
       Model: Order,
@@ -645,8 +678,8 @@ router.get('/orders/:identifier', async (req, res) => {
   }
 });
 
-// POST /orders - create a new order
-router.post('/orders', async (req, res) => {
+// POST /orders - SECURED
+router.post('/orders', authMiddleware, async (req, res) => {
   try {
     let userId;
     if (req.body.userId) {
@@ -669,8 +702,8 @@ router.post('/orders', async (req, res) => {
   }
 });
 
-// PUT /orders/:identifier - update an order
-router.put('/orders/:identifier', async (req, res) => {
+// PUT /orders/:identifier - SECURED
+router.put('/orders/:identifier', authMiddleware, async (req, res) => {
   try {
     const { doc, error } = await fetchByIdentifier({
       Model: Order,
@@ -713,8 +746,8 @@ router.put('/orders/:identifier', async (req, res) => {
   }
 });
 
-// DELETE /orders/:identifier
-router.delete('/orders/:identifier', async (req, res) => {
+// DELETE /orders/:identifier - SECURED (Admin only)
+router.delete('/orders/:identifier', authMiddleware, async (req, res) => {
   try {
     const { doc, error } = await fetchByIdentifier({
       Model: Order,
@@ -735,8 +768,8 @@ router.delete('/orders/:identifier', async (req, res) => {
   }
 });
 
-// DELETE /orders by providing id in body or query
-router.delete('/orders', async (req, res) => {
+// DELETE /orders - SECURED (Admin only)
+router.delete('/orders', authMiddleware, async (req, res) => {
   try {
     const identifier = normalizeId(req.body && req.body.id ? req.body.id : req.query && req.query.id);
     if (!identifier) return res.status(400).json({ error: 'id is required' });
@@ -762,7 +795,7 @@ router.delete('/orders', async (req, res) => {
 });
 
 // Suppliers listing available at /supplier or /suppliers
-router.get(['/supplier', '/suppliers'], async (req, res) => {
+router.get(['/supplier', '/suppliers'], authMiddleware, async (req, res) => {
   try {
     const limit = parseLimit(req.query.limit);
     const suppliers = await Supplier.find()
@@ -777,7 +810,7 @@ router.get(['/supplier', '/suppliers'], async (req, res) => {
 });
 
 // POST /supplier (alias /suppliers) - create a new supplier
-router.post(['/supplier', '/suppliers'], async (req, res) => {
+router.post(['/supplier', '/suppliers'], authMiddleware, async (req, res) => {
   try {
     const proveedor = (req.body.proveedor || '').trim();
 
@@ -803,7 +836,7 @@ router.post(['/supplier', '/suppliers'], async (req, res) => {
 });
 
 // GET /supplier/:identifier (alias /suppliers/:identifier)
-router.get(['/supplier/:identifier', '/suppliers/:identifier'], async (req, res) => {
+router.get(['/supplier/:identifier', '/suppliers/:identifier'], authMiddleware, async (req, res) => {
   try {
     const { doc, error } = await fetchByIdentifier({
       Model: Supplier,
@@ -823,7 +856,7 @@ router.get(['/supplier/:identifier', '/suppliers/:identifier'], async (req, res)
 });
 
 // PUT /supplier/:identifier (alias /suppliers/:identifier)
-router.put(['/supplier/:identifier', '/suppliers/:identifier'], async (req, res) => {
+router.put(['/supplier/:identifier', '/suppliers/:identifier'], authMiddleware, async (req, res) => {
   try {
     const { doc, error } = await fetchByIdentifier({
       Model: Supplier,
@@ -876,7 +909,7 @@ router.put(['/supplier/:identifier', '/suppliers/:identifier'], async (req, res)
 });
 
 // DELETE /supplier/:identifier (alias /suppliers/:identifier)
-router.delete(['/supplier/:identifier', '/suppliers/:identifier'], async (req, res) => {
+router.delete(['/supplier/:identifier', '/suppliers/:identifier'], authMiddleware, async (req, res) => {
   try {
     const { doc, error } = await fetchByIdentifier({
       Model: Supplier,
@@ -900,7 +933,7 @@ router.delete(['/supplier/:identifier', '/suppliers/:identifier'], async (req, r
 // Cart endpoints - Working directly with users.cart field
 
 // GET /cart or /carts - get all carts from all users
-router.get(['/cart', '/carts'], async (req, res) => {
+router.get(['/cart', '/carts'], authMiddleware, async (req, res) => {
   try {
     const limit = parseLimit(req.query.limit);
     const users = await User.find({ 'cart.0': { $exists: true } })
@@ -945,7 +978,7 @@ router.get(['/cart', '/carts'], async (req, res) => {
 });
 
 // GET /cart/:userId - get cart for a specific user
-router.get('/cart/:userId', async (req, res) => {
+router.get('/cart/:userId', authMiddleware, async (req, res) => {
   try {
     const { doc, error } = await resolveUserByIdentifier(req.params.userId, {
       select: '_id id nombre email cart',
@@ -986,7 +1019,7 @@ router.get('/cart/:userId', async (req, res) => {
 });
 
 // POST /cart/:userId/item - add product to user's cart
-router.post('/cart/:userId/item', async (req, res) => {
+router.post('/cart/:userId/item', authMiddleware, async (req, res) => {
   try {
     const productId = normalizeId(req.body.productId);
     const cantidad = Number(req.body.cantidad) || 1;
@@ -1060,7 +1093,7 @@ router.post('/cart/:userId/item', async (req, res) => {
 });
 
 // PUT /cart/:userId/item/:productId - update product quantity in user's cart
-router.put('/cart/:userId/item/:productId', async (req, res) => {
+router.put('/cart/:userId/item/:productId', authMiddleware, async (req, res) => {
   try {
     const productId = normalizeId(req.params.productId);
     const cantidad = Number(req.body.cantidad);
@@ -1121,7 +1154,7 @@ router.put('/cart/:userId/item/:productId', async (req, res) => {
 });
 
 // DELETE /cart/:userId/item/:productId - remove product from user's cart
-router.delete('/cart/:userId/item/:productId', async (req, res) => {
+router.delete('/cart/:userId/item/:productId', authMiddleware, async (req, res) => {
   try {
     const productId = normalizeId(req.params.productId);
 
@@ -1167,7 +1200,7 @@ router.delete('/cart/:userId/item/:productId', async (req, res) => {
 });
 
 // DELETE /cart/:userId - clear entire cart for a user
-router.delete('/cart/:userId', async (req, res) => {
+router.delete('/cart/:userId', authMiddleware, async (req, res) => {
   try {
     const { doc, error } = await resolveUserByIdentifier(req.params.userId, {
       select: '_id id nombre email',
