@@ -29,13 +29,37 @@
     const token = getToken();
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    const res = await fetch(API_PREFIX + path, { ...options, headers });
+    // Make initial request
+    let res = await fetch(API_PREFIX + path, { ...options, headers });
+
+    // If the server rejects due to invalid token, clear saved token and retry once without Authorization
+    if (!res.ok && res.status === 401 && token) {
+      try {
+        console.warn('apiFetch: 401 received with token present — clearing stored token and retrying without auth');
+        localStorage.removeItem('token');
+        sessionStorage.removeItem('token');
+        try { window.dispatchEvent(new Event('auth:token-cleared')); } catch(e) { /* ignore */ }
+      } catch (e) { /* ignore */ }
+
+      const headersNoAuth = { ...headers };
+      delete headersNoAuth['Authorization'];
+      // retry request without Authorization header
+      const retry = await fetch(API_PREFIX + path, { ...options, headers: headersNoAuth });
+      if (retry.ok) {
+        const ct = retry.headers.get('content-type') || '';
+        return ct.includes('application/json') ? retry.json() : retry.text();
+      }
+      // swap res to retry so below code throws appropriate error
+      res = retry;
+    }
+
     if (!res.ok) {
       const text = await res.text().catch(()=>null);
       const err = new Error(text || res.statusText || `HTTP ${res.status}`);
       err.status = res.status;
       throw err;
     }
+
     const ct = res.headers.get('content-type') || '';
     return ct.includes('application/json') ? res.json() : res.text();
   }
