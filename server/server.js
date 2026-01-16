@@ -80,6 +80,8 @@ app.use('/api/admin', adminRouter);
 app.use('/api/checkout', checkoutRouter);
 app.use('/invoice', invoicesRouter);
 app.use('/api/orders', ordersRouter);
+// Also expose orders endpoints without the /api prefix for classroom/demo use
+app.use('/orders', ordersRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/reviews', reviewsRouter);
 app.use('/api/categories', categoriesRouter);

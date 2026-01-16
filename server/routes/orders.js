@@ -17,16 +17,40 @@ router.get('/', async (req, res) => {
 
 
 
+// Helper: resolve products by either Mongo _id or numeric/string `id` field
+async function resolveProductsByIdentifiers(identifiers) {
+  const objs = [];
+  const numeric = [];
+  for (const id of identifiers) {
+    if (!id) continue;
+    const s = String(id).trim();
+    // treat 24-char hex as ObjectId
+    if (/^[0-9a-fA-F]{24}$/.test(s)) objs.push(s);
+    else numeric.push(s);
+  }
+
+  const queries = [];
+  if (objs.length) queries.push(Product.find({ _id: { $in: objs } }).lean());
+  if (numeric.length) queries.push(Product.find({ id: { $in: numeric.map(n => (isNaN(n) ? n : Number(n))) } }).lean());
+
+  const results = (await Promise.all(queries)).flat();
+  const map = new Map();
+  for (const p of results) {
+    if (p._id) map.set(p._id.toString(), p);
+    if (p.id != null) map.set(String(p.id), p);
+  }
+  return map;
+}
+
 // POST /api/orders/calculate - calculate order price breakdown
 router.post('/calculate', async (req, res) => {
   try {
     const items = Array.isArray(req.body.items) ? req.body.items : [];
     if (!items.length) return res.status(400).json({ error: 'No items provided' });
 
-    // Fetch product info for items that provide productId
-    const productIds = items.filter(i => i.productId).map(i => i.productId);
-    const products = productIds.length ? await Product.find({ _id: { $in: productIds } }).lean() : [];
-    const prodMap = Object.fromEntries(products.map(p => [p._id.toString(), p]));
+    // Fetch product info for items that provide productId (supports Mongo _id or numeric id)
+    const productIds = Array.from(new Set(items.filter(i => i.productId).map(i => i.productId)));
+    const prodMap = productIds.length ? await resolveProductsByIdentifiers(productIds) : new Map();
 
     let subtotal = 0;
     let discountTotal = 0;
@@ -37,8 +61,9 @@ router.post('/calculate', async (req, res) => {
       let nombre = it.nombre || it.name || '';
       let descuento = 0;
 
-      if (it.productId && prodMap[it.productId]) {
-        const p = prodMap[it.productId];
+      const lookupKey = it.productId ? String(it.productId) : null;
+      if (lookupKey && prodMap.has(lookupKey)) {
+        const p = prodMap.get(lookupKey);
         nombre = nombre || p.nombre;
         unitPrice = p.precio;
         descuento = Number(p.descuento || 0);
@@ -97,11 +122,10 @@ router.post('/', async (req, res) => {
         jsonPayload: null,
         json(obj) { this.jsonPayload = obj; }
       };
-      // call calculation handler functionally
+      // call calculation handler functionally (support numeric product id or ObjectId)
       await (async function calculateInline() {
-        const productIds = items.filter(i => i.productId).map(i => i.productId);
-        const products = productIds.length ? await Product.find({ _id: { $in: productIds } }).lean() : [];
-        const prodMap = Object.fromEntries(products.map(p => [p._id.toString(), p]));
+        const productIdsInline = Array.from(new Set(items.filter(i => i.productId).map(i => i.productId)));
+        const prodMapInline = productIdsInline.length ? await resolveProductsByIdentifiers(productIdsInline) : new Map();
 
         let subtotal = 0;
         let discountTotal = 0;
@@ -112,8 +136,9 @@ router.post('/', async (req, res) => {
           let nombre = it.nombre || it.name || '';
           let descuento = 0;
 
-          if (it.productId && prodMap[it.productId]) {
-            const p = prodMap[it.productId];
+          const lookupKey = it.productId ? String(it.productId) : null;
+          if (lookupKey && prodMapInline.has(lookupKey)) {
+            const p = prodMapInline.get(lookupKey);
             nombre = nombre || p.nombre;
             unitPrice = p.precio;
             descuento = Number(p.descuento || 0);
@@ -173,11 +198,39 @@ router.get('/top', async (req, res) => {
     const orders = await Order.find().lean();
 
     const computeTotal = o => {
-      if (o.resumen && typeof o.resumen.total === 'number') return o.resumen.total;
-      // fallback: sum item totals if present
-      if (Array.isArray(o.items) && o.items.length) {
-        return o.items.reduce((s, it) => s + (Number(it.total) || 0), 0);
+      // Helper: parse numbers safely
+      const parseNum = v => {
+        if (v == null) return null;
+        const n = Number(v);
+        return Number.isFinite(n) ? n : null;
+      };
+
+      // Common total locations
+      const candidates = [
+        parseNum(o?.resumen?.total),
+        parseNum(o?.resumen?.totales?.total),
+        parseNum(o?.totales?.total),
+        parseNum(o?.resumen?.totales?.subtotal),
+        parseNum(o?.resumen?.totalAmount)
+      ];
+      for (const c of candidates) if (c !== null) return Math.round(c * 100) / 100;
+
+      // Sum conocido item arrays (resumen.productos or items) supporting multiple fields
+      const sumItems = arr => {
+        return arr.reduce((s, it) => {
+          const v = parseNum(it.total) ?? parseNum(it.subtotal) ?? parseNum(it.lineTotal) ?? parseNum(it.precio * (it.cantidad || it.quantity) ) ?? 0;
+          return s + v;
+        }, 0);
+      };
+
+      if (Array.isArray(o?.resumen?.productos) && o.resumen.productos.length) {
+        return Math.round(sumItems(o.resumen.productos) * 100) / 100;
       }
+
+      if (Array.isArray(o?.items) && o.items.length) {
+        return Math.round(sumItems(o.items) * 100) / 100;
+      }
+
       return 0;
     };
 
@@ -210,8 +263,8 @@ router.post('/microservice-create', async (req, res) => {
     const items = Array.isArray(req.body.items) ? req.body.items : [];
     if (!items.length) return res.status(400).json({ error: 'No items provided' });
 
-    // call calculate API
-    const calcResp = await doFetch(`${baseUrl}/api/orders/calculate`, {
+    // call calculate API (use /orders prefix)
+    const calcResp = await doFetch(`${baseUrl}/orders/calculate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ items, taxRate: req.body.taxRate })
@@ -222,8 +275,8 @@ router.post('/microservice-create', async (req, res) => {
     }
     const calcJson = await calcResp.json();
 
-    // call create API with computed resumen
-    const saveResp = await doFetch(`${baseUrl}/api/orders`, {
+    // call create API with computed resumen (use /orders prefix)
+    const saveResp = await doFetch(`${baseUrl}/orders`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ items, resumen: calcJson.resumen, userId: req.body.userId })
