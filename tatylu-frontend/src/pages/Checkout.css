@@ -1,0 +1,38 @@
+.checkout-items {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.payment-option {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.payment-option:hover {
+  border-color: #8B4513 !important;
+}
+
+.payment-option.border-primary {
+  border-color: #8B4513 !important;
+}
+
+.discount-line {
+  color: #198754;
+  font-weight: 600;
+}
+
+/* Dark theme */
+[data-theme="dark"] .checkout-items {
+  color: #e0e0e0;
+}
+
+[data-theme="dark"] .payment-option {
+  background-color: #3d3d3d;
+  border-color: #4d4d4d !important;
+  color: #e0e0e0;
+}
+
+[data-theme="dark"] .payment-option:hover,
+[data-theme="dark"] .payment-option.border-primary {
+  border-color: #d4a574 !important;
+}
