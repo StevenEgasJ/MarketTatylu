@@ -6,7 +6,7 @@ const crypto = require('crypto');
 const User = require('../models/User');
 const { sendMail } = require('../utils/email');
 const { OAuth2Client } = require('google-auth-library');
-const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+let googleClient;
 
 
 // POST /api/auth/register
@@ -150,11 +150,17 @@ router.post('/google', async (req, res) => {
   try {
     const { token } = req.body;
 
+    console.log('GOOGLE_CLIENT_ID:', process.env.GOOGLE_CLIENT_ID);
+    console.log('TOKEN LENGTH:', token?.length);
+
     if (!token) {
       return res.status(400).json({ success: false, error: 'Token no recibido' });
     }
 
-    // Verificar token con Google
+    if (!googleClient) {
+      googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+    }
+
     const ticket = await googleClient.verifyIdToken({
       idToken: token,
       audience: process.env.GOOGLE_CLIENT_ID,
@@ -167,23 +173,20 @@ router.post('/google', async (req, res) => {
     const apellido = payload.family_name || '';
     const photo = payload.picture || '';
 
-    // Buscar usuario existente
     let user = await User.findOne({ email });
 
-    // Si NO existe, crear usuario Google
     if (!user) {
       user = new User({
         nombre,
         apellido,
         email,
         photo,
-        emailVerified: true, // Google ya verifica el email
+        emailVerified: true,
         authProvider: 'google'
       });
       await user.save();
     }
 
-    // Crear JWT
     const jwtToken = jwt.sign(
       { id: user._id, email: user.email },
       process.env.JWT_SECRET || 'devsecret',
