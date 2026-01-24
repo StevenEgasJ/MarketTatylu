@@ -193,3 +193,4 @@ function escapeHtml(unsafe) {
         return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '`': '&#96;' })[m];
     });
 }
+
